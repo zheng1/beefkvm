@@ -1,5 +1,9 @@
 # beefkvm
 
+[![CI](https://github.com/zheng1/beefkvm/actions/workflows/ci.yml/badge.svg)](https://github.com/zheng1/beefkvm/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/zheng1/beefkvm.svg)](https://pkg.go.dev/github.com/zheng1/beefkvm)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 A browser-based KVM and management console for Avocent-style BMCs, in pure Go.
 
 Named after the `0xBEEF` frame magic in the APCP/AVPT protocol it speaks.
