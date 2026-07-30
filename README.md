@@ -78,7 +78,11 @@ personally vouch for:
 | BMC firmware | **2.44** |
 | APCP server version | **2.34** |
 | IPMI version | **2.0** |
-| IPMI manufacturer ID | 15370 (Avocent/Vertiv) |
+| Board vendor | **GIGA-BYTE TECHNOLOGY** (IPMI manufacturer ID 15370) |
+| Board manufacture date | 2011-06-03 (per FRU) |
+| CPU sockets | 1 (only `CPU0` present in the SDR) |
+| Memory | 8× DDR3 slots, 4 channels (`DDR3_P0_A0`…`D1`) |
+| Chipset class | Intel C602-era (SDR exposes `PCH_TEMP`, `P1V_CPU0`, `P1V8_PLL_CPU0`) |
 | IPMI device ID / rev | 32 / 1 |
 | Console resolution | 1024×768 |
 | Video stream | DCT tiles, packet subtype 5 (mode 1, 16×16 MCU) |
@@ -97,8 +101,13 @@ mouse feedback is especially welcome.
 
 ### Likely to work (untested — reports wanted)
 
-The vendor shipped **one Java client family across many OEMs**. Evidence that
-the protocol is shared, from the client JARs themselves:
+The reference machine is the clearest evidence for this: its BMC reports
+**Gigabyte** as the manufacturer, yet the remote console it serves is
+**Avocent's** Java client speaking APCP. In other words Avocent licensed this
+KVM stack to board vendors, so the protocol shows up under many brands and the
+BMC's own vendor ID tells you little about which wire format it speaks.
+
+Further evidence that the protocol is shared, from the client JARs themselves:
 
 - Both the generic Avocent KVM client and Dell's iDRAC6 client are
   `Built-By: Avocent Corporation` and share 245 identically-named classes,
@@ -111,6 +120,7 @@ So these are plausible targets, in rough order of confidence:
 
 | Hardware | Basis | Status |
 |---|---|---|
+| Other **Gigabyte** server boards of the same era (single/dual LGA2011, C602/C204, AST2300) | Same board vendor and BMC generation as the verified unit | Untested |
 | Dell **iDRAC6** (PowerEdge 11G: R610/R710/T610…) | Ships `avctKVM.jar` from the same Avocent codebase; identical IDCT constants | Untested |
 | Avocent **MergePoint** service processors | Same product line as the tested unit | Untested |
 | OEM AST2300/AST2400 boards licensing Avocent KVM (various whitebox/Supermicro-era boards) | Same SoC class and APCP server | Untested |

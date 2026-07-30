@@ -813,7 +813,18 @@ document.getElementById('serial-connect').addEventListener('click', serialConnec
 document.getElementById('serial-disconnect').addEventListener('click', serialDisconnect);
 
 // --- system tab logic ---
-const IPMI_MFG = { 15370: 'Avocent/Vertiv', 4753: 'ASPEED', 2: 'AMI', 674: 'Dell', 343: 'Intel' };
+// IANA Private Enterprise Numbers, as reported by IPMI Get Device ID. These
+// identify who made the BMC/board — NOT who wrote the KVM stack: the reference
+// unit reports Gigabyte (15370) while running a licensed Avocent KVM
+// implementation. Values verified against IANA's enterprise-numbers registry;
+// unknown IDs are shown as the bare number rather than guessed at.
+const IPMI_MFG = {
+  2: 'IBM', 11: 'Hewlett-Packard', 211: 'Fujitsu', 343: 'Intel',
+  476: 'Vertiv (Emerson)', 674: 'Dell', 5771: 'Cisco Systems',
+  7244: 'Quanta Computer', 10418: 'Avocent', 10876: 'Super Micro',
+  11129: 'Google', 15370: 'GIGA-BYTE TECHNOLOGY', 19046: 'Lenovo',
+  20974: 'American Megatrends (AMI)', 37945: 'Inspur', 40092: 'Wiwynn',
+};
 function kvTable(title, rows) {
   const body = rows.filter(r => r[1] !== undefined && r[1] !== '' && r[1] !== null)
     .map(r => `<tr><td style="color:#888;width:220px;">${escapeHTML(r[0])}</td><td class="mono">${escapeHTML(r[1])}</td></tr>`).join('');
