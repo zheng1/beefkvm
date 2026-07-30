@@ -74,19 +74,25 @@ personally vouch for:
 
 | Property | Value |
 |---|---|
-| BMC SoC | ASPEED AST2300-class, embedded Avocent KVM |
+| **Motherboard** | **GIGABYTE GA-6PXSV4** |
+| BIOS | R21_NV (2017-11-21) |
+| Chipset | Intel C600/X79 series (LPC `8086:1d41`) |
+| CPU | Intel Xeon E5-2696 v2 (12C/24T, LGA2011) |
+| Memory | 8× DDR3 slots, 4 channels (`DDR3_P0_A0`…`D1`); 2× 64 GB populated |
+| BMC SoC | ASPEED AST2300-class, licensed Avocent KVM stack |
 | BMC firmware | **2.44** |
 | APCP server version | **2.34** |
 | IPMI version | **2.0** |
-| Board vendor | **GIGA-BYTE TECHNOLOGY** (IPMI manufacturer ID 15370) |
-| Board manufacture date | 2011-06-03 (per FRU) |
-| CPU sockets | 1 (only `CPU0` present in the SDR) |
-| Memory | 8× DDR3 slots, 4 channels (`DDR3_P0_A0`…`D1`) |
-| Chipset class | Intel C602-era (SDR exposes `PCH_TEMP`, `P1V_CPU0`, `P1V8_PLL_CPU0`) |
+| IPMI manufacturer ID | 15370 (GIGA-BYTE TECHNOLOGY) |
 | IPMI device ID / rev | 32 / 1 |
+| Board manufacture date | 2011-06-03 (per FRU) |
 | Console resolution | 1024×768 |
 | Video stream | DCT tiles, packet subtype 5 (mode 1, 16×16 MCU) |
 | SoL | Enabled, channel 1, force-encryption on |
+
+Note that the BMC's FRU is unpopulated (`Board Product: Undefined`), so beefkvm
+cannot report the board model itself — the model above comes from the host's
+SMBIOS. If your BMC has a properly filled FRU, the System tab will show it.
 
 Verified on that machine: KVM video, keyboard (including auto-repeat, with
 keystrokes confirmed on the target screen), key macros, clipboard paste,
@@ -120,7 +126,7 @@ So these are plausible targets, in rough order of confidence:
 
 | Hardware | Basis | Status |
 |---|---|---|
-| Other **Gigabyte** server boards of the same era (single/dual LGA2011, C602/C204, AST2300) | Same board vendor and BMC generation as the verified unit | Untested |
+| Other **Gigabyte GA-6PXSV / GA-7PES** boards (LGA2011, C602/X79, AST2300) | Same vendor, BMC generation, and KVM stack as the verified GA-6PXSV4 | Untested |
 | Dell **iDRAC6** (PowerEdge 11G: R610/R710/T610…) | Ships `avctKVM.jar` from the same Avocent codebase; identical IDCT constants | Untested |
 | Avocent **MergePoint** service processors | Same product line as the tested unit | Untested |
 | OEM AST2300/AST2400 boards licensing Avocent KVM (various whitebox/Supermicro-era boards) | Same SoC class and APCP server | Untested |
