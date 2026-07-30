@@ -17,7 +17,7 @@ jobs:
     name: build binaries
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -165,7 +165,7 @@ jobs:
 
       - name: Check out tap
         if: steps.gate.outputs.enabled == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: zheng1/homebrew-beefkvm
           token: ${{ secrets.TAP_GITHUB_TOKEN }}
