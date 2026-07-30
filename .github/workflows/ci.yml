@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Linux exercises the no-cgo smart-card stub; macOS exercises the real
+        # PC/SC backend, which only compiles there.
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      # Live-hardware tests are opt-in via IKVM_*_LIVE env vars and skip here.
+      - name: Test
+        run: go test -race ./...
+
+  build-nocgo:
+    name: CGO_ENABLED=0 (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # macOS matters here as much as Linux: the PC/SC backend is darwin-only
+        # AND cgo-only, so "darwin without cgo" must still fall through to the
+        # stub. A missing build constraint there once broke this exact case.
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build without cgo
+        env:
+          CGO_ENABLED: "0"
+        run: go build ./...

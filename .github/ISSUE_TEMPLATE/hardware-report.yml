@@ -1,0 +1,85 @@
+name: Hardware report
+description: Tell us whether beefkvm works on your BMC — success or failure, both are useful
+title: "[hardware] <vendor> <model> — works / partially / doesn't"
+labels: ["hardware-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks! beefkvm has only been verified on **one** machine, so every
+        report meaningfully improves the compatibility table.
+
+        **Before you paste anything:** captures and screenshots can contain
+        hostnames, internal IPs, and credentials. Scrub them. Never include your
+        BMC password or a beefkvm session token (the `?t=…` value).
+
+  - type: input
+    id: hardware
+    attributes:
+      label: Server / motherboard model
+      placeholder: e.g. Dell PowerEdge R710, or GIGABYTE GA-6PXSV4
+    validations:
+      required: true
+
+  - type: dropdown
+    id: outcome
+    attributes:
+      label: Overall outcome
+      options:
+        - Works
+        - Partially works
+        - Doesn't work at all
+    validations:
+      required: true
+
+  - type: textarea
+    id: mcinfo
+    attributes:
+      label: BMC identification
+      description: |
+        Output of these two commands (redact the host if you like — we only need
+        the versions and IDs):
+
+        ```sh
+        apcp-probe --host <bmc> --learn-pin
+        ipmitool -I lanplus -H <bmc> -U <user> -P <pass> -C 3 mc info
+        ```
+      render: text
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: features
+    attributes:
+      label: What worked
+      description: Tick what you actually observed. Leave unchecked what you didn't try.
+      options:
+        - label: Connects and logs in
+        - label: Video appears and is readable
+        - label: Keyboard input reaches the target
+        - label: Mouse input works (pointer actually moves)
+        - label: Virtual media mounts
+        - label: Power control
+        - label: Sensors / SEL
+        - label: Serial-over-LAN
+  - type: textarea
+    id: video
+    attributes:
+      label: If video is broken — tile header lines
+      description: |
+        These bytes identify the packet subtype and codec mode, which is exactly
+        what determines whether the decoder needs a new path. Grab them from the
+        beefkvm log:
+
+        ```
+        [avo] tile hdr: fullpayload[0..15]=…  bodyLen=…
+        ```
+      render: text
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: |
+        Screenshots are welcome if you've scrubbed identifying details. A photo
+        of a garbled console is genuinely useful for codec bugs.

@@ -273,6 +273,23 @@ hardware the user already owns.
   hardware this software talks to. There is no affiliation or endorsement.
 - To use this you need your own BMC and your own credentials.
 
+## Contributing
+
+The most useful contribution is a **hardware report** — beefkvm is verified on
+exactly one machine, so telling us whether it works on yours (especially if it
+doesn't) is worth more than any feature. See [CONTRIBUTING.md](CONTRIBUTING.md)
+for that, for how to share captures without leaking hostnames or credentials,
+and for the development workflow.
+
+Please also read the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Security
+
+Report vulnerabilities privately via
+[GitHub's security advisories](../../security/advisories/new) rather than a
+public issue — see [SECURITY.md](SECURITY.md), which also lists the known,
+deliberate limitations that are *not* considered vulnerabilities.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

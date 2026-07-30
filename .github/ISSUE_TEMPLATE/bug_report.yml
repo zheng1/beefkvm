@@ -1,0 +1,64 @@
+name: Bug report
+description: Something behaves incorrectly on hardware where beefkvm otherwise runs
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For "it doesn't work on my BMC at all", please use the **Hardware
+        report** template instead.
+
+        **Security issues should not be filed here** — see
+        [SECURITY.md](../blob/main/SECURITY.md) for private reporting.
+
+        **Scrub before pasting:** logs can contain hostnames, internal IPs, and
+        session tokens. Never include your BMC password or a `?t=…` token.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start beefkvm with …
+        2. Open the … tab
+        3. …
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: beefkvm version
+      description: Commit hash, or the release tag.
+    validations:
+      required: true
+
+  - type: input
+    id: hardware
+    attributes:
+      label: BMC / server model and firmware
+      placeholder: e.g. GIGABYTE GA-6PXSV4, BMC firmware 2.44
+    validations:
+      required: true
+
+  - type: input
+    id: env
+    attributes:
+      label: OS and Go version
+      placeholder: e.g. macOS 15.4 (arm64), go1.26.1
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: The beefkvm terminal output around the failure, and any browser console errors.
+      render: text

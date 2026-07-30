@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest something beefkvm should do
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The README's feature table lists what already exists, including things
+        that are implemented but unverified — worth a look first.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: |
+        What are you trying to do that beefkvm makes hard or impossible today?
+        Describing the situation usually leads to a better solution than
+        describing a specific implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What did you have in mind?
+      description: Optional — a sketch of how it might work.
+
+  - type: input
+    id: hardware
+    attributes:
+      label: Hardware you'd test this on
+      description: |
+        Optional, but valuable. This project's biggest constraint is access to
+        hardware: features can't be verified on BMCs nobody has.
