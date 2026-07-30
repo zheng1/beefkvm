@@ -62,9 +62,12 @@ func (s *ipmiState) readSnapshot() ([]ipmi.Reading, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Bound the sweep: each sensor read retries internally, so an unhealthy BMC
+	// could otherwise hold the session mutex for minutes and make every other
+	// IPMI endpoint (power, SEL, users) hang along with it.
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return c.ReadAll(sensors), nil
+	return c.ReadAllDeadline(sensors, time.Now().Add(8*time.Second)), nil
 }
 
 // openSOL activates a native Serial-over-LAN session against the BMC using the

@@ -265,14 +265,19 @@ func parseFullSDR(s Sensor, b []byte) (Sensor, bool) {
 	bHi := uint16(b[22]&0xC0) << 2
 	s.B = signExtend10(bLo | bHi)
 
-	accLo := uint16(b[23])
-	accHi := uint16(b[24]&0xF0) << 4
+	// Accuracy: 10 bits split across b[22] (bits 7:6 → acc low) and b[23],
+	// with the exponent in b[23] bits 3:2. Only the coarse value is kept.
+	accLo := uint16(b[22]&0xC0) >> 6
+	accHi := uint16(b[23]) << 2
 	s.Accuracy = signExtend12(accLo | accHi)
 
-	// R exp (result) is bits 7:4 of b[25]; B exp (bexp) is bits 3:0. Both
-	// are signed 4-bit.
-	s.Rexp = sign4(b[25] >> 4)
-	s.Bexp = sign4(b[25] & 0x0F)
+	// R exp (result) is bits 7:4 and B exp is bits 3:0 of the "R exp / B exp"
+	// byte — spec byte 30, i.e. b[24] (body starts at spec byte 6). Reading
+	// b[25] instead lands on the accuracy/tolerance field, which made every
+	// sensor parse as Bexp=7/Rexp=0 and inflated voltages by 1000x
+	// (P12V showed 11716 instead of 11.72). Both fields are signed 4-bit.
+	s.Rexp = sign4(b[24] >> 4)
+	s.Bexp = sign4(b[24] & 0x0F)
 
 	// Thresholds. Offsets 27..33 in the body correspond to IPMI bytes
 	// 32..38 (upper NR, upper C, upper NC, lower NR, lower C, lower NC).

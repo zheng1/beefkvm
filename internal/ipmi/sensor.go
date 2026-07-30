@@ -3,6 +3,7 @@ package ipmi
 import (
 	"fmt"
 	"math"
+	"time"
 )
 
 // Reading is the human-consumable snapshot of one sensor: name, converted
@@ -157,12 +158,29 @@ func stateFromMask(m byte) string {
 // are still included with Available=false and Value=0 so the UI can grey
 // out the tile rather than have it vanish.
 func (c *Client) ReadAll(sensors []Sensor) []Reading {
+	return c.ReadAllDeadline(sensors, time.Now().Add(10*time.Second))
+}
+
+// ReadAllDeadline is ReadAll bounded by a wall-clock deadline. Each per-sensor
+// read can retry internally for several seconds, so a flaky BMC could otherwise
+// stall a full sweep for minutes and (because callers serialise on one session)
+// block every other IPMI request. Sensors not reached before the deadline are
+// returned as unavailable rather than making the caller wait.
+func (c *Client) ReadAllDeadline(sensors []Sensor, deadline time.Time) []Reading {
 	out := make([]Reading, 0, len(sensors))
 	for i := range sensors {
 		s := &sensors[i]
 		if s.Analog == 3 || s.EventType != 0x01 {
 			// Skip discrete / event-only sensors for the analog dashboard.
 			// (SEL viewer picks them up separately.)
+			continue
+		}
+		if !time.Now().Before(deadline) {
+			out = append(out, Reading{
+				Name: s.Name, Unit: unitLabel(s.Unit2),
+				Type: sensorTypeName(s.SensorType), Number: s.Number,
+				State: "n/a", Available: false,
+			})
 			continue
 		}
 		r := Reading{

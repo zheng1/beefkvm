@@ -43,3 +43,31 @@ func TestConvertLinear(t *testing.T) {
 		t.Errorf("Convert(100) = %v, want 10", got)
 	}
 }
+
+// TestSDRExponentOffset guards the R/B exponent byte offset in a Type-01 SDR.
+// Regression: these were read from body byte 25 (the accuracy/tolerance field)
+// instead of byte 24, so every sensor parsed as Bexp=7/Rexp=0 and voltages came
+// out 1000x high (P12V read 11716 V instead of 11.72 V).
+func TestSDRExponentOffset(t *testing.T) {
+	b := make([]byte, 48)
+	b[19] = 58   // M low byte (P12V on the reference BMC)
+	b[24] = 0xD0 // R exp = -3 (high nibble), B exp = 0 (low nibble)
+
+	s, ok := parseFullSDR(Sensor{}, b)
+	if !ok {
+		t.Fatal("parseFullSDR rejected a well-formed body")
+	}
+	if s.Rexp != -3 {
+		t.Errorf("Rexp = %d, want -3 (exponents must come from body byte 24)", s.Rexp)
+	}
+	if s.Bexp != 0 {
+		t.Errorf("Bexp = %d, want 0", s.Bexp)
+	}
+	if s.M != 58 {
+		t.Errorf("M = %d, want 58", s.M)
+	}
+	// 58 * 202 * 10^-3 = 11.716 V, matching ipmitool's 11.72.
+	if got := s.Convert(202); got < 11.6 || got > 11.8 {
+		t.Errorf("Convert(202) = %.4f, want ~11.716 V", got)
+	}
+}

@@ -24,7 +24,7 @@ the console in a normal browser tab:
 |---|---|
 | KVM video (custom DCT codec) | Working — full-rate, sharp text |
 | Keyboard (USB HID) + auto-repeat | Working |
-| Mouse (absolute) | Working |
+| Mouse (absolute) | Implemented; movement unverified (text-only test target) |
 | Key macros: Ctrl+Alt+Del, Alt+Tab, Ctrl+Alt+F1–F6, sticky modifiers | Working |
 | Clipboard paste into the console | Working |
 | Virtual media (mount ISO / USB / floppy) | Working |
@@ -55,19 +55,85 @@ the console in a normal browser tab:
   development only ever emits DCT tiles, so that path has not run against live
   hardware.
 
-## Hardware tested
+## Screenshots
 
-Developed against a single machine, so the compatibility claim is deliberately
-narrow:
+Sensors — live SDR readings over IPMI, streamed to the browser:
 
-- ASPEED AST2300-class BMC with embedded Avocent KVM
-- BMC firmware **2.44**, APCP server version **2.34**, IPMI **2.0**
-- IPMI manufacturer ID 15370 (Avocent/Vertiv)
-- Console resolution 1024×768
+![Sensors tab](docs/images/sensors.png)
 
-If it works — or doesn't — on other Avocent-derived BMCs (MergePoint and
-various OEM rebadges), please open an issue with the output of
-`apcp-probe --host <bmc> --learn-pin` and your BMC firmware version.
+System — BMC firmware, FRU inventory, and TLS certificate details:
+
+![System tab](docs/images/system.png)
+
+## Hardware support
+
+### Verified working
+
+Exactly one machine, tested end to end. This is the only configuration I can
+personally vouch for:
+
+| Property | Value |
+|---|---|
+| BMC SoC | ASPEED AST2300-class, embedded Avocent KVM |
+| BMC firmware | **2.44** |
+| APCP server version | **2.34** |
+| IPMI version | **2.0** |
+| IPMI manufacturer ID | 15370 (Avocent/Vertiv) |
+| IPMI device ID / rev | 32 / 1 |
+| Console resolution | 1024×768 |
+| Video stream | DCT tiles, packet subtype 5 (mode 1, 16×16 MCU) |
+| SoL | Enabled, channel 1, force-encryption on |
+
+Verified on that machine: KVM video, keyboard (including auto-repeat, with
+keystrokes confirmed on the target screen), key macros, clipboard paste,
+virtual media, power control, one-time boot device, 28 sensors cross-checked
+against `ipmitool`, SEL, user management, LAN config read, SoL activation, and
+session auto-reconnect.
+
+Mouse input is implemented and its frames are accepted by the BMC without
+error, but the test target only ever showed a text console, so pointer
+*movement* was never confirmed visually. If you run a graphical console,
+mouse feedback is especially welcome.
+
+### Likely to work (untested — reports wanted)
+
+The vendor shipped **one Java client family across many OEMs**. Evidence that
+the protocol is shared, from the client JARs themselves:
+
+- Both the generic Avocent KVM client and Dell's iDRAC6 client are
+  `Built-By: Avocent Corporation` and share 245 identically-named classes,
+  including the whole `com.avocent.kvm.a.a` codec package.
+- The video decoder in both uses the **same integer IDCT constants**
+  (362 / 473 / 277 / 669) and the same quantisation-table layout — the codec
+  core this project reimplements.
+
+So these are plausible targets, in rough order of confidence:
+
+| Hardware | Basis | Status |
+|---|---|---|
+| Dell **iDRAC6** (PowerEdge 11G: R610/R710/T610…) | Ships `avctKVM.jar` from the same Avocent codebase; identical IDCT constants | Untested |
+| Avocent **MergePoint** service processors | Same product line as the tested unit | Untested |
+| OEM AST2300/AST2400 boards licensing Avocent KVM (various whitebox/Supermicro-era boards) | Same SoC class and APCP server | Untested |
+| Dell **iDRAC7/8** | Newer stack; KVM moved to a different transport | Unlikely without work |
+| **iDRAC9**, modern AMI MegaRAC, Redfish-only BMCs | Different protocol entirely (HTML5/Redfish) | Out of scope |
+
+Class-name overlap is strong evidence but not proof: the decoder classes differ
+byte-for-byte between versions, so wire-level details may still diverge. Treat
+the whole table as a hypothesis until someone reports back.
+
+### Reporting your hardware
+
+Whether it works or not, a report helps. Please open an issue with:
+
+```sh
+apcp-probe --host <bmc> --learn-pin     # cert pin + handshake info
+ipmitool -I lanplus -H <bmc> -U <user> -P <pass> -C 3 mc info
+```
+
+plus your server model, BMC firmware version, and — if video is broken — the
+`[avo] tile hdr:` lines from the beefkvm log. Those bytes identify the packet
+subtype and codec mode, which is what determines whether the decoder needs
+another path.
 
 ## Install
 
