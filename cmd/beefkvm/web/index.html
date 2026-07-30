@@ -1,0 +1,1294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ikvm-web — Avocent BMC KVM</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #111; color: #ddd; font: 13px/1.4 -apple-system, BlinkMacSystemFont, sans-serif; }
+  #wrap { display: flex; flex-direction: column; height: 100%; }
+  header { padding: 8px 12px; background: #222; display: flex; align-items: center; gap: 12px; }
+  header .status { font-weight: bold; }
+  header .status.disconnected { color: #e88; }
+  header .status.connected { color: #7d7; }
+  nav.tabs { display: flex; background: #1a1a1a; border-bottom: 1px solid #333; }
+  nav.tabs button { background: transparent; color: #aaa; border: none; padding: 8px 16px; cursor: pointer; font: inherit; border-right: 1px solid #333; }
+  nav.tabs button.active { background: #222; color: #fff; border-bottom: 2px solid #4a90e2; }
+  nav.tabs button:hover:not(.active) { background: #262626; color: #ddd; }
+  #key-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 12px; background: #1a1a1a; border-bottom: 1px solid #333; }
+  #key-bar button { background: #2a2a2a; color: #ddd; border: 1px solid #444; padding: 4px 10px; font: inherit; border-radius: 3px; cursor: pointer; }
+  #key-bar button:hover { background: #333; }
+  #key-bar button.mod.held { background: #4a90e2; color: #fff; border-color: #6ab0ff; }
+  #key-bar .sep { width: 1px; height: 20px; background: #333; margin: 0 4px; }
+  #key-bar .label { color: #777; font-size: 11px; }
+  #main { flex: 1; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+  #main.media-view { display: block; overflow: auto; padding: 16px 24px; }
+  #screen { border: 1px solid #444; image-rendering: pixelated; image-rendering: crisp-edges; }
+  #screen.captured { cursor: none; }
+  .hint { font-size: 12px; color: #888; padding: 6px 12px; background: #1a1a1a; border-top: 1px solid #333; }
+  .panel-hidden { display: none !important; }
+  .media-actions { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+  .media-actions button, .media-actions input[type=text] { background: #2a2a2a; color: #ddd; border: 1px solid #444; padding: 6px 12px; font: inherit; border-radius: 3px; }
+  .media-actions button { cursor: pointer; }
+  .media-actions button:hover { background: #333; }
+  .media-actions input[type=text] { min-width: 320px; }
+  table.mounts { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  table.mounts th, table.mounts td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #2a2a2a; font-size: 13px; }
+  table.mounts th { color: #888; font-weight: 500; }
+  table.mounts td.mono { font-family: ui-monospace, Menlo, monospace; }
+  table.mounts button.unmount { background: #732; color: #fdd; border: 1px solid #944; padding: 3px 10px; border-radius: 3px; cursor: pointer; }
+  table.mounts button.unmount:hover { background: #944; }
+  #media-msg { margin-top: 12px; color: #e88; min-height: 1.2em; white-space: pre-wrap; }
+  #media-msg.ok { color: #7d7; }
+
+  /* Sensors tab */
+  .sensors-group { margin-bottom: 20px; }
+  .sensors-group h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #888; font-weight: 500; }
+  .sensor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+  .sensor-tile { background: #1a1a1a; border: 1px solid #2a2a2a; border-left: 3px solid #444; padding: 8px 10px; border-radius: 3px; }
+  .sensor-tile.nominal { border-left-color: #4a8; }
+  .sensor-tile.non-critical { border-left-color: #db4; }
+  .sensor-tile.critical { border-left-color: #d84; }
+  .sensor-tile.unrecoverable { border-left-color: #e55; }
+  .sensor-tile.na { border-left-color: #555; opacity: 0.55; }
+  .sensor-tile .name { font-size: 11px; color: #aaa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sensor-tile .value { font-size: 20px; font-family: ui-monospace, Menlo, monospace; margin-top: 2px; }
+  .sensor-tile .value .unit { font-size: 12px; color: #888; margin-left: 4px; }
+  .sensor-tile canvas.spark { display: block; width: 100%; height: 24px; margin-top: 4px; }
+  .sensor-tile .state { font-size: 10px; text-transform: uppercase; color: #666; }
+  #sensors-msg { color: #e88; padding: 8px 0; min-height: 1.2em; }
+
+  /* Events tab */
+  .events-actions { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .events-actions button { background: #2a2a2a; color: #ddd; border: 1px solid #444; padding: 6px 12px; font: inherit; border-radius: 3px; cursor: pointer; }
+  .events-actions button.danger { background: #732; color: #fdd; border-color: #944; }
+  .events-actions button.danger:hover { background: #944; }
+  .events-actions .info { color: #888; }
+  table.events { width: 100%; border-collapse: collapse; }
+  table.events th, table.events td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #2a2a2a; font-size: 12px; vertical-align: top; }
+  table.events th { color: #888; font-weight: 500; }
+  table.events td.mono { font-family: ui-monospace, Menlo, monospace; }
+  table.events tr.info td.sev { color: #79a; }
+  table.events tr.non-critical td.sev { color: #db4; }
+  table.events tr.critical td.sev { color: #d84; }
+  table.events tr.unrecoverable td.sev { color: #e55; }
+  #events-msg { color: #e88; padding: 8px 0; min-height: 1.2em; }
+
+  /* Serial tab */
+  #term { background: #000; color: #cfc; font-family: ui-monospace, Menlo, monospace; font-size: 13px;
+          line-height: 1.25; padding: 8px 10px; margin: 0; height: 60vh; overflow-y: auto;
+          white-space: pre-wrap; word-break: break-all; border: 1px solid #333; border-radius: 3px; outline: none; }
+  #term:focus { border-color: #4a90e2; }
+  #serial-msg.connected { color: #7d7; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header>
+    <span>ikvm-web</span>
+    <span id="status" class="status disconnected">connecting…</span>
+    <span id="dims"></span>
+    <span style="flex: 1"></span>
+    <span id="power-led" title="Power state" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#555;margin-right:4px;"></span>
+    <span id="power-state" style="color:#888;margin-right:8px;">?</span>
+    <button id="btn-power-on" title="Power On">⏻ On</button>
+    <button id="btn-power-off" title="Hard Power Off">⏹ Off</button>
+    <button id="btn-power-reset" title="Hard Reset">↻ Reset</button>
+    <button id="btn-power-soft" title="Soft (ACPI) Shutdown">Soft</button>
+    <select id="boot-device" title="One-time boot device on next start">
+      <option value="">Boot: default</option>
+      <option value="pxe">PXE</option>
+      <option value="cd">CD/DVD</option>
+      <option value="hdd">HDD</option>
+      <option value="bios">BIOS Setup</option>
+    </select>
+    <button id="capture" style="margin-left:8px;">Click screen to capture</button>
+  </header>
+  <nav class="tabs">
+    <button id="tab-console" class="active" data-panel="panel-console">Console</button>
+    <button id="tab-media" data-panel="panel-media">Media</button>
+    <button id="tab-sensors" data-panel="panel-sensors">Sensors</button>
+    <button id="tab-events" data-panel="panel-events">Events</button>
+    <button id="tab-system" data-panel="panel-system">System</button>
+    <button id="tab-serial" data-panel="panel-serial">Serial</button>
+    <button id="tab-users" data-panel="panel-users">Users</button>
+    <button id="tab-network" data-panel="panel-network">Network</button>
+  </nav>
+  <div id="key-bar" role="toolbar" aria-label="Keyboard macros">
+    <span class="label">Hold</span>
+    <button class="mod" data-mod="224">Ctrl</button>
+    <button class="mod" data-mod="226">Alt</button>
+    <button class="mod" data-mod="225">Shift</button>
+    <button class="mod" data-mod="227">Meta</button>
+    <span class="sep"></span>
+    <button data-combo="224,226,76">Ctrl+Alt+Del</button>
+    <button data-combo="226,43">Alt+Tab</button>
+    <button data-combo="224,226,58">C-A-F1</button>
+    <button data-combo="224,226,59">F2</button>
+    <button data-combo="224,226,60">F3</button>
+    <button data-combo="224,226,61">F4</button>
+    <button data-combo="224,226,62">F5</button>
+    <button data-combo="224,226,63">F6</button>
+    <button data-combo="224,226,42">C-A-Bksp</button>
+    <span class="sep"></span>
+    <button id="paste-btn">Paste…</button>
+  </div>
+  <div id="main">
+    <div id="panel-console">
+      <canvas id="screen" width="1024" height="768" tabindex="0"></canvas>
+    </div>
+    <div id="panel-media" class="panel-hidden">
+      <div class="media-actions">
+        <button data-mount="cd">Mount ISO (upload)…</button>
+        <button data-mount="usb">Mount USB image (upload)…</button>
+        <button data-mount="floppy">Mount Floppy (upload)…</button>
+        <input type="file" id="upload-file" style="display:none">
+      </div>
+      <div class="media-actions">
+        <input type="text" id="server-path" placeholder="/server/local/path.iso">
+        <select id="server-type">
+          <option value="cd">CD-ROM (ISO)</option>
+          <option value="usb">USB image</option>
+          <option value="floppy">Floppy</option>
+        </select>
+        <label><input type="checkbox" id="server-writable"> writable</label>
+        <button id="mount-server">Mount server-side path</button>
+      </div>
+      <table class="mounts">
+        <thead><tr>
+          <th>Drive</th><th>Type</th><th>Path</th><th>Size</th>
+          <th>Read</th><th>Written</th><th>Since</th><th></th>
+        </tr></thead>
+        <tbody id="mounts-body">
+          <tr><td colspan="8" style="color:#666;padding:12px;">No media mounted.</td></tr>
+        </tbody>
+      </table>
+      <div id="media-msg"></div>
+    </div>
+    <div id="panel-sensors" class="panel-hidden">
+      <div id="sensors-msg"></div>
+      <div id="sensors-groups"></div>
+    </div>
+    <div id="panel-events" class="panel-hidden">
+      <div class="events-actions">
+        <button id="events-refresh">Refresh</button>
+        <span class="info" id="events-summary"></span>
+        <span style="flex:1"></span>
+        <button id="events-clear" class="danger">Clear SEL…</button>
+      </div>
+      <table class="events">
+        <thead><tr>
+          <th style="width:170px;">Time</th>
+          <th style="width:60px;">Sensor</th>
+          <th style="width:100px;">Type</th>
+          <th style="width:80px;" class="sev">Severity</th>
+          <th>Event</th>
+        </tr></thead>
+        <tbody id="events-body">
+          <tr><td colspan="5" style="color:#666;padding:12px;">No events loaded.</td></tr>
+        </tbody>
+      </table>
+      <div id="events-msg"></div>
+    </div>
+    <div id="panel-system" class="panel-hidden">
+      <div class="events-actions">
+        <button id="system-refresh">Refresh</button>
+        <span class="info" id="system-msg"></span>
+      </div>
+      <div id="system-groups"></div>
+    </div>
+    <div id="panel-serial" class="panel-hidden">
+      <div class="events-actions">
+        <button id="serial-connect">Connect</button>
+        <button id="serial-disconnect" class="danger">Disconnect</button>
+        <span class="info" id="serial-msg">disconnected</span>
+      </div>
+      <pre id="term" tabindex="0" spellcheck="false"></pre>
+      <div class="info" style="margin-top:6px;">Click the terminal to type. Serial output appears only if the target OS has a serial console (getty) on this port.</div>
+    </div>
+    <div id="panel-users" class="panel-hidden">
+      <div class="events-actions">
+        <button id="users-refresh">Refresh</button>
+        <span class="info" id="users-msg"></span>
+      </div>
+      <table class="events">
+        <thead><tr>
+          <th style="width:50px;">ID</th><th style="width:160px;">Name</th>
+          <th style="width:120px;">Privilege</th><th style="width:90px;">Enabled</th>
+          <th style="width:90px;">IPMI msg</th><th></th>
+        </tr></thead>
+        <tbody id="users-body">
+          <tr><td colspan="6" style="color:#666;padding:12px;">No users loaded.</td></tr>
+        </tbody>
+      </table>
+      <div id="users-edit" style="margin-top:16px; display:none;">
+        <h3 style="font-size:12px;text-transform:uppercase;color:#888;">Edit user <span id="ue-id"></span></h3>
+        <div class="media-actions">
+          <input type="text" id="ue-name" placeholder="username" maxlength="16">
+          <input type="password" id="ue-pass" placeholder="new password (blank = keep)" maxlength="16">
+          <select id="ue-priv">
+            <option value="4">Administrator</option>
+            <option value="3">Operator</option>
+            <option value="2">User</option>
+            <option value="15">No Access</option>
+          </select>
+          <label><input type="checkbox" id="ue-enabled"> enabled</label>
+          <button id="ue-apply">Apply</button>
+          <button id="ue-cancel">Cancel</button>
+        </div>
+        <div class="info" id="ue-msg"></div>
+      </div>
+    </div>
+    <div id="panel-network" class="panel-hidden">
+      <div class="events-actions">
+        <button id="net-refresh">Refresh</button>
+        <span class="info" id="net-msg"></span>
+      </div>
+      <div id="net-groups"></div>
+      <div style="margin-top:16px;">
+        <h3 style="font-size:12px;text-transform:uppercase;color:#888;">Change (applies to BMC — use care)</h3>
+        <div class="media-actions">
+          <select id="net-source">
+            <option value="static">Static</option>
+            <option value="dhcp">DHCP</option>
+          </select>
+          <input type="text" id="net-ip" placeholder="IP e.g. 203.0.113.10">
+          <input type="text" id="net-mask" placeholder="Subnet mask">
+          <input type="text" id="net-gw" placeholder="Gateway">
+          <button id="net-apply" class="danger">Apply network change…</button>
+        </div>
+        <div class="info" style="color:#db4;">Warning: changing the IP of the channel you're connected through will drop this session and you'll need the new address.</div>
+        <div class="info" id="net-apply-msg"></div>
+      </div>
+    </div>
+  </div>
+  <div class="hint">Click the screen to capture keyboard. Press <kbd>Esc</kbd> twice to release.</div>
+</div>
+<script>
+const canvas = document.getElementById('screen');
+const ctx = canvas.getContext('2d');
+const status = document.getElementById('status');
+const dims = document.getElementById('dims');
+const mainEl = document.getElementById('main');
+let ws, connected = false, captured = false;
+let fbW = 1024, fbH = 768;
+
+// --- token helpers ---
+const params = new URLSearchParams(location.search);
+const token = params.get('t') || '';
+function tokenQuery() { return token ? '?t=' + encodeURIComponent(token) : ''; }
+
+// --- WebSocket for video ---
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(proto + '//' + location.host + '/ws' + tokenQuery());
+  ws.binaryType = 'arraybuffer';
+  ws.onopen = () => {
+    connected = true;
+    status.textContent = 'connected';
+    status.className = 'status connected';
+  };
+  ws.onclose = () => {
+    connected = false;
+    status.textContent = 'disconnected';
+    status.className = 'status disconnected';
+    setTimeout(connect, 2000);
+  };
+  ws.onmessage = (ev) => {
+    const buf = new Uint8Array(ev.data);
+    if (buf.length < 8) return;
+    const magic = String.fromCharCode(buf[0], buf[1], buf[2], buf[3]);
+
+    if (magic === 'CURS') {
+      if (buf.length < 12) return;
+      const hotX = (buf[4] << 8) | buf[5];
+      const hotY = (buf[6] << 8) | buf[7];
+      const w = (buf[8] << 8) | buf[9];
+      const h = (buf[10] << 8) | buf[11];
+      if (buf.length < 12 + w * h * 4) return;
+      const curCanvas = document.createElement('canvas');
+      curCanvas.width = w; curCanvas.height = h;
+      const curCtx = curCanvas.getContext('2d');
+      const px = buf.slice(12);
+      const img = new ImageData(new Uint8ClampedArray(px.buffer, px.byteOffset, w * h * 4), w, h);
+      curCtx.putImageData(img, 0, 0);
+      canvas.style.cursor = `url(${curCanvas.toDataURL()}) ${hotX} ${hotY}, auto`;
+      return;
+    }
+
+    if (magic !== 'IKVM') return;
+    const w = (buf[4] << 8) | buf[5];
+    const h = (buf[6] << 8) | buf[7];
+    if (w !== fbW || h !== fbH) {
+      canvas.width = w; canvas.height = h;
+      fbW = w; fbH = h;
+      dims.textContent = w + 'x' + h;
+      fitCanvas();
+    }
+    const px = buf.slice(8);
+    const img = new ImageData(new Uint8ClampedArray(px.buffer, px.byteOffset, w * h * 4), w, h);
+    ctx.putImageData(img, 0, 0);
+  };
+}
+
+// fitCanvas sizes the canvas element so each source pixel maps to a WHOLE
+// number of device pixels. Without this, the 1024x768 backing store is
+// stretched to fill the container at a fractional ratio — and on a Retina
+// display (dpr=2) that fractional upscale blurs the crisp console text even
+// with image-rendering:pixelated. Snapping to an integer device-pixel scale
+// keeps text sharp. The pixel DATA is already correct (verified byte-identical
+// to the server PNG); this only fixes how it's displayed.
+function fitCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const avail = document.getElementById('main'); // flex container with real size
+  const availW = avail.clientWidth || window.innerWidth;
+  const availH = avail.clientHeight || window.innerHeight;
+  // Largest integer device-pixel scale that still fits, at least 1.
+  const scaleDev = Math.max(1, Math.floor(Math.min(
+    (availW * dpr) / canvas.width,
+    (availH * dpr) / canvas.height)));
+  canvas.style.width = ((canvas.width * scaleDev) / dpr) + 'px';
+  canvas.style.height = ((canvas.height * scaleDev) / dpr) + 'px';
+}
+window.addEventListener('resize', fitCanvas);
+fitCanvas();
+connect();
+
+function send(msg) {
+  if (connected) ws.send(JSON.stringify(msg));
+}
+
+// --- input handlers (console tab only) ---
+canvas.addEventListener('click', () => { canvas.focus(); captured = true; canvas.classList.add('captured'); });
+
+canvas.addEventListener('mousemove', (e) => {
+  const r = canvas.getBoundingClientRect();
+  const x = Math.round((e.clientX - r.left) * fbW / r.width);
+  const y = Math.round((e.clientY - r.top) * fbH / r.height);
+  send({ type: 'mouse', x, y, buttons: 0, wheel: 0 });
+});
+canvas.addEventListener('mousedown', (e) => {
+  const r = canvas.getBoundingClientRect();
+  const x = Math.round((e.clientX - r.left) * fbW / r.width);
+  const y = Math.round((e.clientY - r.top) * fbH / r.height);
+  const buttons = (e.button === 0 ? 1 : e.button === 2 ? 2 : 4);
+  send({ type: 'mouse', x, y, buttons, wheel: 0 });
+});
+canvas.addEventListener('mouseup', (e) => {
+  const r = canvas.getBoundingClientRect();
+  const x = Math.round((e.clientX - r.left) * fbW / r.width);
+  const y = Math.round((e.clientY - r.top) * fbH / r.height);
+  send({ type: 'mouse', x, y, buttons: 0, wheel: 0 });
+});
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  send({ type: 'mouse', x: 0, y: 0, buttons: 0, wheel: e.deltaY > 0 ? -1 : 1 });
+}, { passive: false });
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+let lastEsc = 0;
+
+// Map KeyboardEvent.code (physical key) to USB HID keyboard usage codes,
+// which is the on-wire format the BMC firmware expects (verified against
+// the Avocent Java client's com.avocent.kvm.base.c.d table — e.g. modifier
+// keys encode as HID 224-231, Enter as 40, not Java VK constants). HID
+// usage IDs are layout-independent; the BMC applies its own keymap.
+const CODE_TO_HID = {
+  // Letters a-z → 4..29
+  KeyA:4,KeyB:5,KeyC:6,KeyD:7,KeyE:8,KeyF:9,KeyG:10,KeyH:11,KeyI:12,
+  KeyJ:13,KeyK:14,KeyL:15,KeyM:16,KeyN:17,KeyO:18,KeyP:19,KeyQ:20,KeyR:21,
+  KeyS:22,KeyT:23,KeyU:24,KeyV:25,KeyW:26,KeyX:27,KeyY:28,KeyZ:29,
+  // Digit row 1-9,0 → 30..39
+  Digit1:30,Digit2:31,Digit3:32,Digit4:33,Digit5:34,
+  Digit6:35,Digit7:36,Digit8:37,Digit9:38,Digit0:39,
+  // Control / whitespace
+  Enter:40,Escape:41,Backspace:42,Tab:43,Space:44,
+  // Symbols
+  Minus:45,Equal:46,BracketLeft:47,BracketRight:48,Backslash:49,
+  Semicolon:51,Quote:52,Backquote:53,Comma:54,Period:55,Slash:56,
+  CapsLock:57,
+  // Function keys F1-F12 → 58..69
+  F1:58,F2:59,F3:60,F4:61,F5:62,F6:63,F7:64,F8:65,F9:66,F10:67,F11:68,F12:69,
+  // Editing / navigation
+  PrintScreen:70,ScrollLock:71,Pause:72,Insert:73,Home:74,PageUp:75,
+  Delete:76,End:77,PageDown:78,ArrowRight:79,ArrowLeft:80,ArrowDown:81,ArrowUp:82,
+  // Numpad
+  NumLock:83,NumpadDivide:84,NumpadMultiply:85,NumpadSubtract:86,NumpadAdd:87,
+  NumpadEnter:88,Numpad1:89,Numpad2:90,Numpad3:91,Numpad4:92,Numpad5:93,
+  Numpad6:94,Numpad7:95,Numpad8:96,Numpad9:97,Numpad0:98,NumpadDecimal:99,
+  ContextMenu:101,
+  // Modifiers → 224..231
+  ControlLeft:224,ShiftLeft:225,AltLeft:226,MetaLeft:227,
+  ControlRight:228,ShiftRight:229,AltRight:230,MetaRight:231,
+};
+function toHID(e) {
+  const h = CODE_TO_HID[e.code];
+  return h !== undefined ? h : 0; // 0 = no HID usage; firmware ignores it
+}
+
+// HID modifier usage codes (Ctrl/Shift/Alt/Meta, left+right) must be HELD so
+// they combine with the keys pressed while they're down; everything else is a
+// discrete keystroke.
+function isModifierHID(h) { return h >= 224 && h <= 231; }
+
+canvas.addEventListener('keydown', (e) => {
+  e.preventDefault();
+  if (e.key === 'Escape') {
+    const now = Date.now();
+    if (now - lastEsc < 400) { captured = false; canvas.blur(); canvas.classList.remove('captured'); return; }
+    lastEsc = now;
+  }
+  const h = toHID(e);
+  if (!h) return;
+  if (isModifierHID(h)) {
+    if (e.repeat) return;                 // a held modifier stays down; no re-press
+    send({ type: 'key', key: h, pressed: true });
+    return;
+  }
+  // Normal keys: emit one COMPLETE keystroke (down+up) per keydown event,
+  // INCLUDING OS auto-repeat events. This BMC's emulated USB HID device does
+  // NOT auto-repeat a key that is merely held down (verified live: holding
+  // Backspace 2.5s deleted a single char, while 15 discrete down+up pairs
+  // deleted 15) — so the browser's OS repeat must drive the repeat, forwarded
+  // as real keystrokes. Any modifiers held (physical or sticky toolbar) stay
+  // down across these, so Shift+key, Ctrl+key, etc. still combine.
+  send({ type: 'key', key: h, pressed: true });
+  send({ type: 'key', key: h, pressed: false });
+});
+canvas.addEventListener('keyup', (e) => {
+  e.preventDefault();
+  const h = toHID(e);
+  if (!h || !isModifierHID(h)) return;    // normal keys already released on keydown
+  // The BMC's emulated USB HID device intermittently drops frames (visible as
+  // "usb port: cannot reset (err -71)" on the target). A dropped modifier
+  // RELEASE strands it as held → every later key is silently modified. Releases
+  // are idempotent, so send a few spaced retries; one surviving frame clears it.
+  send({ type: 'key', key: h, pressed: false });
+  setTimeout(() => send({ type: 'key', key: h, pressed: false }), 12);
+  setTimeout(() => send({ type: 'key', key: h, pressed: false }), 30);
+});
+
+document.getElementById('capture').onclick = () => { canvas.focus(); captured = true; canvas.classList.add('captured'); };
+
+// --- keyboard macros: sticky modifiers, preset combos, clipboard paste ---
+// All reuse the same on-wire {type:'key', key:<HID>, pressed} channel as the
+// physical keyboard, so there is no protocol/backend change — a combo is just
+// an ordered sequence of press/release events.
+const keyBar = document.getElementById('key-bar');
+const heldMods = new Set(); // HID usage codes of sticky-held modifiers
+
+// releaseKey mirrors the physical keyup retry: the BMC's emulated USB HID
+// device intermittently drops frames, and a lost RELEASE strands the key as
+// held (target auto-repeats). Releases are idempotent, so retry once.
+function releaseKey(code) {
+  send({ type: 'key', key: code, pressed: false });
+  setTimeout(() => send({ type: 'key', key: code, pressed: false }), 12);
+}
+
+function clearMods() {
+  heldMods.forEach(code => releaseKey(code));
+  heldMods.clear();
+  keyBar.querySelectorAll('.mod.held').forEach(b => b.classList.remove('held'));
+}
+
+// Modifier buttons support BOTH interaction styles, and press on pointerdown so
+// there is instant highlight feedback (the old click-only handler only fired on
+// mouse-UP, so a press-and-hold looked completely dead — "按钮无法长按"):
+//   • quick tap  → latch (sticky): stays held so you can combine it hands-free
+//     with a physical keystroke or an on-screen combo; tap again to release.
+//   • press-hold → momentary: held only while the button is pressed, released
+//     when you let go (hold with the mouse, tap a key with the other hand).
+// Held modifiers combine with physical canvas keystrokes AND with paste.
+const TAP_MS = 250;
+keyBar.querySelectorAll('.mod').forEach(btn => {
+  const code = +btn.dataset.mod;
+  let gesture = null; // {t0} while a fresh press is in progress
+
+  const pressDown = () => { heldMods.add(code); btn.classList.add('held'); send({ type: 'key', key: code, pressed: true }); };
+  const releaseUp = () => { heldMods.delete(code); btn.classList.remove('held'); releaseKey(code); };
+
+  btn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (heldMods.has(code)) {
+      releaseUp();        // already latched → this press toggles it off
+      gesture = null;
+    } else {
+      pressDown();
+      gesture = { t0: Date.now() };
+    }
+    canvas.focus();       // keep keystrokes flowing to the console while held
+  });
+  const finish = () => {
+    if (!gesture) return; // toggle-off gesture, or nothing in progress
+    const heldLong = Date.now() - gesture.t0 >= TAP_MS;
+    gesture = null;
+    if (heldLong) releaseUp();  // deliberate hold → release on let-go (momentary)
+    // quick tap → leave it latched (sticky)
+    canvas.focus();
+  };
+  btn.addEventListener('pointerup', finish);
+  btn.addEventListener('pointerleave', finish);
+  btn.addEventListener('pointercancel', finish);
+});
+
+// A preset combo presses each code in order then releases in reverse. It first
+// clears sticky modifiers so the sequence is self-contained (no desync between
+// the toolbar highlight and the BMC's HID state).
+function sendCombo(codes) {
+  clearMods();
+  let t = 0; const step = 25;
+  for (const c of codes) { setTimeout(() => send({ type: 'key', key: c, pressed: true }), t); t += step; }
+  for (const c of [...codes].reverse()) { setTimeout(() => releaseKey(c), t); t += step; }
+}
+
+keyBar.querySelectorAll('button[data-combo]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    sendCombo(btn.dataset.combo.split(',').map(Number));
+    canvas.focus();
+  });
+});
+
+// Clipboard paste → typed as HID keystrokes. US-QWERTY char → {hid, shift}.
+// (The BMC applies its own keymap to HID usage codes, but the shift decision is
+// made here from the physical US layout, matching the Avocent client.)
+const CHAR_HID = (() => {
+  const m = {};
+  for (let i = 0; i < 26; i++) {
+    const lo = String.fromCharCode(97 + i);
+    m[lo] = { hid: 4 + i, shift: false };
+    m[lo.toUpperCase()] = { hid: 4 + i, shift: true };
+  }
+  '1234567890'.split('').forEach((d, i) => { m[d] = { hid: 30 + i, shift: false }; });
+  const unshifted = { ' ': 44, '\n': 40, '\t': 43, '-': 45, '=': 46, '[': 47, ']': 48,
+    '\\': 49, ';': 51, "'": 52, '`': 53, ',': 54, '.': 55, '/': 56 };
+  for (const c in unshifted) m[c] = { hid: unshifted[c], shift: false };
+  const shifted = { '!': 30, '@': 31, '#': 32, '$': 33, '%': 34, '^': 35, '&': 36,
+    '*': 37, '(': 38, ')': 39, '_': 45, '+': 46, '{': 47, '}': 48, '|': 49, ':': 51,
+    '"': 52, '~': 53, '<': 54, '>': 55, '?': 56 };
+  for (const c in shifted) m[c] = { hid: shifted[c], shift: true };
+  return m;
+})();
+
+// typeText paces the keystrokes so the emulated USB HID device isn't flooded
+// (a burst drops frames → missing characters). ~14ms/event.
+function typeText(text) {
+  clearMods();
+  const SHIFT = 225;
+  let t = 0; const step = 14;
+  let sent = 0;
+  for (const ch of text) {
+    if (ch === '\r') continue;
+    const e = CHAR_HID[ch];
+    if (!e) continue; // silently skip characters not on the US layout
+    if (e.shift) { setTimeout(() => send({ type: 'key', key: SHIFT, pressed: true }), t); t += step; }
+    setTimeout(() => send({ type: 'key', key: e.hid, pressed: true }), t); t += step;
+    setTimeout(() => send({ type: 'key', key: e.hid, pressed: false }), t); t += step;
+    if (e.shift) { setTimeout(() => send({ type: 'key', key: SHIFT, pressed: false }), t); t += step; }
+    sent++;
+  }
+  return sent;
+}
+
+document.getElementById('paste-btn').addEventListener('click', async () => {
+  let text = '';
+  try {
+    // Requires a secure context — works on 127.0.0.1/localhost and https, but
+    // NOT over plain http to a LAN IP. Fall back to a prompt there.
+    text = await navigator.clipboard.readText();
+  } catch (err) {
+    text = window.prompt('Clipboard access needs 127.0.0.1 or HTTPS.\nPaste the text to type into the target:') || '';
+  }
+  if (!text) return;
+  if (text.length > 2000 && !confirm(`Type ${text.length} characters into the target? This takes a moment.`)) return;
+  typeText(text);
+  canvas.focus();
+});
+
+// --- tab switching ---
+const panels = ['panel-console','panel-media','panel-sensors','panel-events','panel-system','panel-serial','panel-users','panel-network'];
+const tabs = document.querySelectorAll('nav.tabs button');
+tabs.forEach(btn => {
+  btn.addEventListener('click', () => {
+    tabs.forEach(b => b.classList.toggle('active', b === btn));
+    panels.forEach(p => document.getElementById(p).classList.toggle('panel-hidden', btn.dataset.panel !== p));
+    mainEl.classList.toggle('media-view', btn.dataset.panel !== 'panel-console');
+    // The key-bar only applies to the console; hide it elsewhere so it doesn't
+    // steal vertical space (and so fitCanvas measures the right #main height).
+    const onConsole = btn.dataset.panel === 'panel-console';
+    keyBar.classList.toggle('panel-hidden', !onConsole);
+    // Leaving console: drop capture so keys don't get swallowed, and release any
+    // sticky modifier so it can't strand the target's HID device as held.
+    if (!onConsole) {
+      clearMods();
+      captured = false;
+      canvas.blur();
+      canvas.classList.remove('captured');
+    } else {
+      // Returning to console: #main layout changed, re-fit for crisp scaling.
+      fitCanvas();
+    }
+    if (btn.dataset.panel === 'panel-media') refreshMounts();
+    if (btn.dataset.panel === 'panel-sensors') startSensorsStream();
+    else stopSensorsStream();
+    if (btn.dataset.panel === 'panel-events') refreshEvents();
+    if (btn.dataset.panel === 'panel-system') refreshSystem();
+    if (btn.dataset.panel === 'panel-serial') serialConnect();
+    else serialDisconnect();
+    if (btn.dataset.panel === 'panel-users') refreshUsers();
+    if (btn.dataset.panel === 'panel-network') refreshNetwork();
+  });
+});
+
+// --- network tab logic ---
+const netMsg = document.getElementById('net-msg');
+async function refreshNetwork() {
+  netMsg.textContent = 'loading…';
+  try {
+    const r = await fetch('/api/network' + tokenQuery(), { credentials: 'same-origin' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const c = await r.json();
+    document.getElementById('net-groups').innerHTML = kvTable('BMC LAN (channel ' + c.channel + ')', [
+      ['IP source', c.ip_source], ['IP address', c.ip], ['Subnet mask', c.subnet_mask],
+      ['Gateway', c.gateway], ['MAC', c.mac], ['Gateway MAC', c.gateway_mac],
+      ['VLAN', c.vlan_id >= 0 ? c.vlan_id : 'disabled'],
+    ]);
+    document.getElementById('net-source').value = c.ip_source === 'dhcp' ? 'dhcp' : 'static';
+    document.getElementById('net-ip').value = c.ip || '';
+    document.getElementById('net-mask').value = c.subnet_mask || '';
+    document.getElementById('net-gw').value = c.gateway || '';
+    netMsg.textContent = '';
+  } catch (e) { netMsg.textContent = 'failed: ' + e.message; }
+}
+document.getElementById('net-refresh').addEventListener('click', refreshNetwork);
+document.getElementById('net-apply').addEventListener('click', async () => {
+  const src = document.getElementById('net-source').value;
+  const body = { ip_source: src };
+  if (src === 'static') {
+    body.ip = document.getElementById('net-ip').value.trim();
+    body.subnet_mask = document.getElementById('net-mask').value.trim();
+    body.gateway = document.getElementById('net-gw').value.trim();
+  }
+  const warn = src === 'dhcp'
+    ? 'Switch the BMC to DHCP? Its IP may change and drop this session.'
+    : `Set BMC to ${body.ip} / ${body.subnet_mask} gw ${body.gateway}? If the IP changes, this session drops and you must reconnect at the new address.`;
+  if (!confirm(warn)) return;
+  const m = document.getElementById('net-apply-msg');
+  m.textContent = 'applying…';
+  try {
+    const r = await fetch('/api/network' + tokenQuery(), {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error((await r.json()).error || ('HTTP ' + r.status));
+    await refreshNetwork();
+    m.textContent = 'applied.';
+  } catch (e) { m.textContent = 'failed: ' + e.message; }
+});
+
+// --- users tab logic ---
+const usersBody = document.getElementById('users-body');
+const usersMsg = document.getElementById('users-msg');
+const PRIV_OPTS = { 4:'Administrator', 3:'Operator', 2:'User', 15:'No Access' };
+let usersCache = [];
+async function refreshUsers() {
+  usersMsg.textContent = 'loading…';
+  try {
+    const r = await fetch('/api/users' + tokenQuery(), { credentials: 'same-origin' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    usersCache = await r.json();
+    renderUsers();
+    usersMsg.textContent = '';
+  } catch (e) { usersMsg.textContent = 'failed: ' + e.message; }
+}
+function renderUsers() {
+  usersBody.innerHTML = usersCache.map(u => `
+    <tr>
+      <td>${escapeHTML(u.id)}</td>
+      <td class="mono">${u.name ? esc(u.name) : '<span style="color:#666;">(empty)</span>'}</td>
+      <td>${escapeHTML(u.privilege_name)}</td>
+      <td style="color:${u.enabled?'#7d7':'#888'}">${u.enabled?'yes':'no'}</td>
+      <td style="color:${u.msg_enabled?'#7d7':'#888'}">${u.msg_enabled?'yes':'no'}</td>
+      <td><button data-edit="${escapeHTML(u.id)}">Edit</button></td>
+    </tr>`).join('');
+  usersBody.querySelectorAll('button[data-edit]').forEach(b =>
+    b.addEventListener('click', () => editUser(+b.dataset.edit)));
+}
+const ue = id => document.getElementById(id);
+let ueCurrent = 0;
+function editUser(id) {
+  const u = usersCache.find(x => x.id === id); if (!u) return;
+  ueCurrent = id;
+  ue('ue-id').textContent = id;
+  ue('ue-name').value = u.name || '';
+  ue('ue-pass').value = '';
+  ue('ue-priv').value = String(u.privilege === 15 ? 15 : u.privilege);
+  ue('ue-enabled').checked = u.enabled;
+  ue('ue-msg').textContent = '';
+  ue('users-edit').style.display = 'block';
+}
+ue('ue-cancel').addEventListener('click', () => { ue('users-edit').style.display = 'none'; });
+ue('ue-apply').addEventListener('click', async () => {
+  const body = {
+    id: ueCurrent,
+    name: ue('ue-name').value,
+    privilege: parseInt(ue('ue-priv').value, 10),
+    enabled: ue('ue-enabled').checked,
+  };
+  const pass = ue('ue-pass').value;
+  if (pass) body.password = pass;
+  ue('ue-msg').textContent = 'applying…';
+  try {
+    const r = await fetch('/api/users' + tokenQuery(), {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error((await r.json()).error || ('HTTP ' + r.status));
+    usersCache = await r.json();
+    renderUsers();
+    ue('ue-msg').textContent = 'applied.';
+    ue('users-edit').style.display = 'none';
+  } catch (e) { ue('ue-msg').textContent = 'failed: ' + e.message; }
+});
+document.getElementById('users-refresh').addEventListener('click', refreshUsers);
+
+// --- serial (SOL) tab: minimal terminal over /ws/sol ---
+const term = document.getElementById('term');
+const serialMsg = document.getElementById('serial-msg');
+let solWS = null;
+// Strip the most common ANSI/VT escape sequences so a plain <pre> stays legible
+// (full xterm emulation is a future enhancement). Handles CSI, OSC, and single
+// ESC-char sequences.
+const ANSI_RE = /\x1b\[[0-9;?]*[ -\/]*[@-~]|\x1b\][^\x07]*\x07|\x1b[@-Z\\-_]/g;
+function termWrite(text) {
+  const atBottom = term.scrollTop + term.clientHeight >= term.scrollHeight - 4;
+  let s = text.replace(ANSI_RE, '');
+  // Apply carriage-return / backspace crudely against the last line.
+  for (const ch of s) {
+    if (ch === '\r') continue;            // let \n drive newlines
+    if (ch === '\b' || ch === '\x7f') { term.textContent = term.textContent.slice(0, -1); continue; }
+    if (ch === '\x07') continue;          // bell
+    term.textContent += ch;
+  }
+  if (atBottom) term.scrollTop = term.scrollHeight;
+}
+function serialConnect() {
+  if (solWS && (solWS.readyState === 0 || solWS.readyState === 1)) return;
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  solWS = new WebSocket(proto + '//' + location.host + '/ws/sol' + tokenQuery());
+  solWS.binaryType = 'arraybuffer';
+  solWS.onopen = () => { serialMsg.textContent = 'connected'; serialMsg.className = 'info connected'; term.focus(); };
+  solWS.onclose = () => { serialMsg.textContent = 'disconnected'; serialMsg.className = 'info'; };
+  solWS.onerror = () => { serialMsg.textContent = 'error'; serialMsg.className = 'info'; };
+  solWS.onmessage = (ev) => {
+    if (typeof ev.data === 'string') termWrite(ev.data);
+    else termWrite(new TextDecoder('latin1').decode(new Uint8Array(ev.data)));
+  };
+}
+function serialDisconnect() {
+  if (solWS) { try { solWS.close(); } catch (e) {} solWS = null; }
+}
+function solSend(bytes) {
+  if (solWS && solWS.readyState === 1) solWS.send(new Uint8Array(bytes));
+}
+// Translate keystrokes to serial bytes.
+term.addEventListener('keydown', (e) => {
+  if (!solWS || solWS.readyState !== 1) return;
+  let out = null;
+  if (e.key === 'Enter') out = [0x0d];
+  else if (e.key === 'Backspace') out = [0x7f];
+  else if (e.key === 'Tab') out = [0x09];
+  else if (e.key === 'Escape') out = [0x1b];
+  else if (e.key === 'ArrowUp') out = [0x1b, 0x5b, 0x41];
+  else if (e.key === 'ArrowDown') out = [0x1b, 0x5b, 0x42];
+  else if (e.key === 'ArrowRight') out = [0x1b, 0x5b, 0x43];
+  else if (e.key === 'ArrowLeft') out = [0x1b, 0x5b, 0x44];
+  else if (e.ctrlKey && e.key.length === 1) {
+    const c = e.key.toUpperCase().charCodeAt(0);
+    if (c >= 64 && c <= 95) out = [c - 64]; // Ctrl-A..Ctrl-_
+  } else if (e.key.length === 1 && !e.metaKey) {
+    out = Array.from(new TextEncoder().encode(e.key));
+  }
+  if (out) { e.preventDefault(); solSend(out); }
+});
+document.getElementById('serial-connect').addEventListener('click', serialConnect);
+document.getElementById('serial-disconnect').addEventListener('click', serialDisconnect);
+
+// --- system tab logic ---
+const IPMI_MFG = { 15370: 'Avocent/Vertiv', 4753: 'ASPEED', 2: 'AMI', 674: 'Dell', 343: 'Intel' };
+function kvTable(title, rows) {
+  const body = rows.filter(r => r[1] !== undefined && r[1] !== '' && r[1] !== null)
+    .map(r => `<tr><td style="color:#888;width:220px;">${escapeHTML(r[0])}</td><td class="mono">${escapeHTML(r[1])}</td></tr>`).join('');
+  if (!body) return '';
+  return `<div class="sensors-group"><h3>${escapeHTML(title)}</h3><table class="events"><tbody>${body}</tbody></table></div>`;
+}
+async function refreshSystem() {
+  const msg = document.getElementById('system-msg');
+  const groups = document.getElementById('system-groups');
+  msg.textContent = 'loading…';
+  try {
+    const r = await fetch('/api/system' + tokenQuery(), { credentials: 'same-origin' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    let html = '';
+    if (d.device) {
+      const dev = d.device;
+      const mfg = IPMI_MFG[dev.manufacturer_id] ? `${IPMI_MFG[dev.manufacturer_id]} (${dev.manufacturer_id})` : dev.manufacturer_id;
+      html += kvTable('BMC', [
+        ['BMC firmware', dev.firmware_rev],
+        ['IPMI version', dev.ipmi_version],
+        ['Manufacturer', mfg],
+        ['Product ID', dev.product_id],
+        ['Device ID / rev', `${dev.device_id} / ${dev.device_revision}`],
+      ]);
+    } else if (d.device_error) {
+      html += kvTable('BMC', [['error', d.device_error]]);
+    }
+    if (d.fru) {
+      const f = d.fru;
+      html += kvTable('Board (FRU)', [
+        ['Manufacturer', f.board_mfg], ['Product', f.board_product],
+        ['Serial', f.board_serial], ['Part', f.board_part],
+      ]);
+      html += kvTable('Product (FRU)', [
+        ['Manufacturer', f.product_mfg], ['Name', f.product_name],
+        ['Part/Model', f.product_part], ['Version', f.product_version],
+        ['Serial', f.product_serial], ['Asset tag', f.product_asset],
+      ]);
+    } else if (d.fru_error) {
+      html += kvTable('FRU', [['error', d.fru_error]]);
+    }
+    // BMC TLS certificate (separate endpoint; best-effort).
+    try {
+      const cr = await fetch('/api/cert' + tokenQuery(), { credentials: 'same-origin' });
+      if (cr.ok) {
+        const c = await cr.json();
+        const exp = c.expired ? `EXPIRED` : `${c.days_remaining} days left`;
+        html += kvTable('BMC TLS certificate', [
+          ['Subject', c.subject], ['Issuer', c.issuer],
+          ['Valid from', c.not_before], ['Valid until', `${c.not_after}  (${exp})`],
+          ['Signature', c.signature_algorithm],
+          ['SHA-256', c.fingerprint_sha256],
+          ['Pinned match', c.pin_matches ? 'yes' : 'NO'],
+        ]);
+      }
+    } catch (e) { /* cert is optional */ }
+    // Smart-card (CAC/PIV) reader status.
+    try {
+      const sr = await fetch('/api/smartcard' + tokenQuery(), { credentials: 'same-origin' });
+      if (sr.ok) {
+        const s = await sr.json();
+        html += kvTable('Smart card (CAC/PIV redirection)', [
+          ['Reader', s.available ? (s.reader || 'present') : 'none'],
+          ['Card inserted', s.available ? (s.card_present ? 'yes' : 'no') : '—'],
+          ['ATR', s.atr],
+          ['Status', s.available
+            ? 'reader ready — insert a card, then mount media to redirect it'
+            : ('unavailable: ' + (s.reason || 'no reader'))],
+        ]);
+      }
+    } catch (e) { /* smart card is optional */ }
+    groups.innerHTML = html || '<p style="color:#888;">No system info available.</p>';
+    // Flag an expired cert visually.
+    groups.querySelectorAll('td').forEach(td => {
+      if (/EXPIRED|Pinned match.*NO/.test(td.textContent) || td.textContent === 'NO') td.style.color = '#e55';
+    });
+    msg.textContent = '';
+  } catch (e) {
+    msg.textContent = 'failed: ' + e.message;
+  }
+}
+document.getElementById('system-refresh').addEventListener('click', refreshSystem);
+
+// --- media tab logic ---
+const mountsBody = document.getElementById('mounts-body');
+const mediaMsg = document.getElementById('media-msg');
+const uploadInput = document.getElementById('upload-file');
+let pendingUploadType = 'cd';
+
+function fmtBytes(n) {
+  if (n < 1024) return n + ' B';
+  const units = ['KB','MB','GB','TB'];
+  let u = -1, x = n;
+  do { x /= 1024; u++; } while (x >= 1024 && u < units.length - 1);
+  return x.toFixed(x < 10 ? 2 : 1) + ' ' + units[u];
+}
+
+function showMsg(text, ok) {
+  mediaMsg.textContent = text || '';
+  mediaMsg.className = ok ? 'ok' : '';
+}
+
+async function refreshMounts() {
+  try {
+    const r = await fetch('/api/vm/status' + tokenQuery(), { credentials: 'same-origin' });
+    if (!r.ok) throw new Error(await r.text());
+    const rows = await r.json();
+    if (!rows.length) {
+      mountsBody.innerHTML = '<tr><td colspan="8" style="color:#666;padding:12px;">No media mounted.</td></tr>';
+      return;
+    }
+    mountsBody.innerHTML = '';
+    rows.forEach(m => {
+      const tr = document.createElement('tr');
+      const totalBytes = m.blocks * (m.block_size || 512);
+      tr.innerHTML = `
+        <td>${escapeHTML(m.drive_id)}</td>
+        <td>${escapeHTML(m.type)}</td>
+        <td class="mono" title="${escapeHTML(m.path)}">${escapeHTML(m.path.length > 60 ? '…' + m.path.slice(-60) : m.path)}</td>
+        <td>${fmtBytes(totalBytes)}</td>
+        <td>${fmtBytes(m.bytes_read)}</td>
+        <td>${fmtBytes(m.bytes_written)}</td>
+        <td>${new Date(m.mounted_at).toLocaleTimeString()}</td>
+        <td><button class="unmount" data-drive="${m.drive_id}">Unmount</button></td>
+      `;
+      mountsBody.appendChild(tr);
+    });
+    mountsBody.querySelectorAll('button.unmount').forEach(btn => {
+      btn.addEventListener('click', () => unmount(Number(btn.dataset.drive)));
+    });
+  } catch (e) {
+    showMsg('status failed: ' + e.message, false);
+  }
+}
+
+async function unmount(driveID) {
+  if (!confirm(`Unmount drive ${driveID}? The guest OS will see it disappear.`)) return;
+  try {
+    const r = await fetch('/api/vm/unmount' + tokenQuery(), {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({drive_id: driveID}),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    showMsg('unmounted drive ' + driveID, true);
+    refreshMounts();
+  } catch (e) {
+    showMsg('unmount failed: ' + e.message, false);
+  }
+}
+
+document.querySelectorAll('button[data-mount]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    pendingUploadType = btn.dataset.mount;
+    uploadInput.value = '';
+    uploadInput.click();
+  });
+});
+
+uploadInput.addEventListener('change', async () => {
+  const f = uploadInput.files[0];
+  if (!f) return;
+  showMsg('uploading ' + f.name + ' (' + fmtBytes(f.size) + ')…', true);
+  const fd = new FormData();
+  fd.append('file', f);
+  const q = tokenQuery() + (tokenQuery() ? '&' : '?') + 'type=' + encodeURIComponent(pendingUploadType);
+  try {
+    const r = await fetch('/api/vm/upload' + q, {
+      method: 'POST',
+      credentials: 'same-origin',
+      body: fd,
+    });
+    if (!r.ok) throw new Error(await r.text());
+    showMsg('mounted ' + f.name, true);
+    refreshMounts();
+  } catch (e) {
+    showMsg('upload failed: ' + e.message, false);
+  }
+});
+
+document.getElementById('mount-server').addEventListener('click', async () => {
+  const path = document.getElementById('server-path').value.trim();
+  const type = document.getElementById('server-type').value;
+  const writable = document.getElementById('server-writable').checked;
+  if (!path) { showMsg('server path required', false); return; }
+  try {
+    const r = await fetch('/api/vm/mount' + tokenQuery(), {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({type, path, writable}),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    showMsg('mounted ' + path, true);
+    refreshMounts();
+  } catch (e) {
+    showMsg('mount failed: ' + e.message, false);
+  }
+});
+
+// Poll status every 3s while the Media tab is visible.
+setInterval(() => {
+  if (!document.getElementById('panel-media').classList.contains('panel-hidden')) {
+    refreshMounts();
+  }
+}, 3000);
+
+// --- Sensors tab ---
+// Categorised into groups the operator scans first (temps, fans, ...).
+const SENSOR_GROUPS = [
+  {id: 'temperature', label: 'Temperatures'},
+  {id: 'fan',         label: 'Fans'},
+  {id: 'voltage',     label: 'Voltages'},
+  {id: 'current',     label: 'Currents'},
+  {id: 'power',       label: 'Power'},
+  {id: 'other',       label: 'Other'},
+];
+
+const sensorsMsg = document.getElementById('sensors-msg');
+const sensorsGroups = document.getElementById('sensors-groups');
+let sensorsES = null;                 // EventSource
+const sensorHistory = new Map();      // name -> ring buffer (last 60 samples)
+const sensorTiles = new Map();        // name -> {tile, valueEl, sparkEl, stateEl}
+
+function startSensorsStream() {
+  if (sensorsES) return;
+  sensorsMsg.textContent = '';
+  try {
+    sensorsES = new EventSource('/api/sensors/stream' + tokenQuery(), { withCredentials: true });
+  } catch (e) {
+    sensorsMsg.textContent = 'stream error: ' + e.message;
+    return;
+  }
+  sensorsES.addEventListener('sensors', (ev) => {
+    try {
+      renderSensors(JSON.parse(ev.data));
+    } catch (e) {
+      sensorsMsg.textContent = 'parse error: ' + e.message;
+    }
+  });
+  sensorsES.addEventListener('error', (ev) => {
+    if (ev.data) sensorsMsg.textContent = 'stream: ' + ev.data;
+  });
+  sensorsES.onerror = () => {
+    // EventSource auto-reconnects; surface it once.
+    sensorsMsg.textContent = 'stream disconnected — retrying';
+  };
+}
+
+function stopSensorsStream() {
+  if (sensorsES) { sensorsES.close(); sensorsES = null; }
+}
+
+function renderSensors(readings) {
+  // Build DOM once per unique sensor name, then update in place.
+  const groupsById = new Map();
+  SENSOR_GROUPS.forEach(g => groupsById.set(g.id, []));
+  readings.forEach(r => {
+    const gid = groupsById.has(r.type) ? r.type : 'other';
+    groupsById.get(gid).push(r);
+  });
+
+  // Full rebuild only when the set of names changes; otherwise update
+  // per-tile in place so the DOM stays stable.
+  const wantNames = new Set(readings.map(r => r.name));
+  const haveNames = new Set(sensorTiles.keys());
+  const setEqual = wantNames.size === haveNames.size &&
+    [...wantNames].every(n => haveNames.has(n));
+
+  if (!setEqual) {
+    sensorsGroups.innerHTML = '';
+    sensorTiles.clear();
+    SENSOR_GROUPS.forEach(g => {
+      const list = groupsById.get(g.id);
+      if (!list || !list.length) return;
+      const wrap = document.createElement('div');
+      wrap.className = 'sensors-group';
+      wrap.innerHTML = `<h3>${g.label}</h3><div class="sensor-grid" id="grid-${g.id}"></div>`;
+      sensorsGroups.appendChild(wrap);
+      const grid = wrap.querySelector('.sensor-grid');
+      list.forEach(r => {
+        const tile = document.createElement('div');
+        tile.className = 'sensor-tile';
+        tile.innerHTML = `
+          <div class="name" title="${escapeHTML(r.name)}">${escapeHTML(r.name)}</div>
+          <div class="value"><span class="v">–</span><span class="unit">${escapeHTML(r.unit || '')}</span></div>
+          <canvas class="spark" width="180" height="24"></canvas>
+          <div class="state">–</div>
+        `;
+        grid.appendChild(tile);
+        sensorTiles.set(r.name, {
+          tile,
+          valueEl: tile.querySelector('.value .v'),
+          sparkEl: tile.querySelector('canvas.spark'),
+          stateEl: tile.querySelector('.state'),
+        });
+      });
+    });
+  }
+
+  // Update in-place.
+  readings.forEach(r => {
+    const t = sensorTiles.get(r.name);
+    if (!t) return;
+    const state = r.available ? r.state : 'na';
+    t.tile.classList.remove('nominal','non-critical','critical','unrecoverable','na');
+    t.tile.classList.add(state === 'n/a' ? 'na' : state);
+    t.stateEl.textContent = r.available ? (r.state || '') : 'unavailable';
+    if (r.available) {
+      t.valueEl.textContent = formatValue(r.value);
+      let hist = sensorHistory.get(r.name);
+      if (!hist) { hist = []; sensorHistory.set(r.name, hist); }
+      hist.push(r.value);
+      if (hist.length > 60) hist.shift();
+      drawSpark(t.sparkEl, hist, r);
+    }
+  });
+}
+
+function formatValue(v) {
+  if (Math.abs(v) >= 1000) return v.toFixed(0);
+  if (Math.abs(v) >= 10)   return v.toFixed(1);
+  return v.toFixed(2);
+}
+
+function drawSpark(cv, samples, r) {
+  const ctx = cv.getContext('2d');
+  const w = cv.width, h = cv.height;
+  ctx.clearRect(0, 0, w, h);
+  if (samples.length < 2) return;
+  let lo = Math.min(...samples), hi = Math.max(...samples);
+  // Include thresholds in y-range so the line isn't visually pinned.
+  if (r.has_thresh) {
+    if (r.upper_crit) hi = Math.max(hi, r.upper_crit);
+    if (r.lower_crit) lo = Math.min(lo, r.lower_crit);
+  }
+  if (hi === lo) { hi = lo + 1; }
+  const pad = (hi - lo) * 0.1;
+  lo -= pad; hi += pad;
+  ctx.strokeStyle = '#4a90e2';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  samples.forEach((s, i) => {
+    const x = (i / (60 - 1)) * w;
+    const y = h - ((s - lo) / (hi - lo)) * h;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+}
+
+// --- Events tab ---
+const eventsBody = document.getElementById('events-body');
+const eventsMsg = document.getElementById('events-msg');
+const eventsSummary = document.getElementById('events-summary');
+
+async function refreshEvents() {
+  eventsMsg.textContent = '';
+  try {
+    const r = await fetch('/api/sel?limit=500' + (tokenQuery() ? '&t=' + encodeURIComponent(token) : ''),
+      { credentials: 'same-origin' });
+    if (!r.ok) throw new Error(await r.text());
+    const data = await r.json();
+    const rows = data.entries || [];
+    eventsSummary.textContent = `${rows.length} shown · ${data.info?.entry_count ?? '?'} total`;
+    if (!rows.length) {
+      eventsBody.innerHTML = '<tr><td colspan="5" style="color:#666;padding:12px;">No events.</td></tr>';
+      return;
+    }
+    // Reverse so newest is at the top.
+    rows.reverse();
+    eventsBody.innerHTML = '';
+    rows.forEach(e => {
+      const tr = document.createElement('tr');
+      tr.className = e.severity || 'info';
+      const t = e.time ? new Date(e.time).toLocaleString() : '';
+      tr.innerHTML = `
+        <td class="mono">${t}</td>
+        <td>#${e.sensor_num}</td>
+        <td>0x${(e.sensor_type||0).toString(16).padStart(2,'0')}</td>
+        <td class="sev">${e.severity || 'info'}</td>
+        <td>${escapeHTML(e.description || '')}</td>
+      `;
+      eventsBody.appendChild(tr);
+    });
+  } catch (e) {
+    eventsMsg.textContent = 'load failed: ' + e.message;
+  }
+}
+
+function escapeHTML(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+document.getElementById('events-refresh').addEventListener('click', refreshEvents);
+document.getElementById('events-clear').addEventListener('click', async () => {
+  if (!confirm('Clear the entire System Event Log? This cannot be undone.')) return;
+  try {
+    const r = await fetch('/api/sel' + tokenQuery(), { method: 'DELETE', credentials: 'same-origin' });
+    if (!r.ok) throw new Error(await r.text());
+    eventsMsg.textContent = 'SEL cleared.';
+    refreshEvents();
+  } catch (e) {
+    eventsMsg.textContent = 'clear failed: ' + e.message;
+  }
+});
+
+// --- Power control (header) ---
+const powerLed = document.getElementById('power-led');
+const powerState = document.getElementById('power-state');
+const btnOn = document.getElementById('btn-power-on');
+const btnOff = document.getElementById('btn-power-off');
+const btnReset = document.getElementById('btn-power-reset');
+const btnSoft = document.getElementById('btn-power-soft');
+const bootSel = document.getElementById('boot-device');
+
+async function refreshPower() {
+  try {
+    const r = await fetch('/api/power/status' + tokenQuery(), { credentials: 'same-origin' });
+    if (!r.ok) throw new Error(r.status);
+    const j = await r.json();
+    const on = j.power === 'on';
+    powerLed.style.background = on ? '#2c2' : '#c22';
+    powerState.textContent = on ? 'ON' : 'OFF';
+    powerState.style.color = on ? '#7d7' : '#e88';
+    btnOn.disabled = on;
+    btnOff.disabled = !on;
+    btnReset.disabled = !on;
+    btnSoft.disabled = !on;
+  } catch (e) {
+    powerLed.style.background = '#555';
+    powerState.textContent = 'IPMI?';
+    powerState.style.color = '#888';
+    btnOn.disabled = btnOff.disabled = btnReset.disabled = btnSoft.disabled = true;
+  }
+}
+
+async function powerAction(action, needsConfirm) {
+  if (needsConfirm && !confirm('Confirm ' + action.toUpperCase() + '?')) return;
+  try {
+    const r = await fetch('/api/power' + tokenQuery(), {
+      method: 'POST', credentials: 'same-origin',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action}),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    setTimeout(refreshPower, 800);
+  } catch (e) {
+    alert(action + ' failed: ' + e.message);
+  }
+}
+
+btnOn.addEventListener('click', () => powerAction('on', false));
+btnOff.addEventListener('click', () => powerAction('off', true));
+btnReset.addEventListener('click', () => powerAction('reset', true));
+btnSoft.addEventListener('click', () => powerAction('soft', true));
+
+bootSel.addEventListener('change', async () => {
+  const dev = bootSel.value;
+  if (!dev) return;
+  try {
+    const r = await fetch('/api/power/boot' + tokenQuery(), {
+      method: 'POST', credentials: 'same-origin',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({device: dev}),
+    });
+    if (!r.ok) throw new Error(await r.text());
+  } catch (e) {
+    alert('set boot device failed: ' + e.message);
+  }
+});
+
+refreshPower();
+setInterval(refreshPower, 10000);
+</script>
+</body>
+</html>

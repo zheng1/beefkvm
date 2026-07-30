@@ -1,0 +1,33 @@
+# Built binaries
+/beefkvm
+/beefkvm-power
+/beefkvm-vm
+/beefkvm-usb
+/apcp-probe
+/apcp-capture
+*.exe
+
+# Vendor client artifacts — NEVER commit these. The Avocent/Vertiv JARs,
+# native libraries, and any bundled JRE are proprietary and redistributing
+# them would infringe copyright. beefkvm does not need them to run.
+*.jar
+/jre/
+/lib/
+avct*/
+ikvm.java.security
+
+# Protocol captures and decode dumps: these contain frames from a real BMC
+# (hostnames, IPs, whatever was on screen). Keep them local.
+/testdata/captures/
+/testdata/tiles/
+*.rgb
+*.bin
+decompiled/
+
+# Local credentials / device-specific pins
+.env.local
+*.pem
+*.pin
+
+# OS / editor
+.DS_Store
