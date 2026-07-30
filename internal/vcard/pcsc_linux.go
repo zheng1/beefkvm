@@ -1,8 +1,23 @@
-//go:build darwin && cgo
+//go:build linux && cgo
 
 package vcard
 
-// #cgo LDFLAGS: -framework PCSC
+// Linux PC/SC backend, built on pcsclite. The API is the PC/SC Workgroup one,
+// so this mirrors the macOS backend almost line for line; the differences are
+// the header location (<PCSC/winscard.h> from pcsclite rather than the macOS
+// framework) and linking against libpcsclite instead of -framework PCSC.
+//
+// Requires the pcsclite development headers at build time:
+//
+//	Debian/Ubuntu:  apt install libpcsclite-dev
+//	Fedora/RHEL:    dnf install pcsc-lite-devel
+//	Alpine:         apk add pcsc-lite-dev
+//
+// and the pcscd daemon running at runtime. Builds with CGO_ENABLED=0 fall back
+// to the stub, so a static binary simply reports smart-card support as
+// unavailable rather than failing to build.
+
+// #cgo pkg-config: libpcsclite
 // #include <PCSC/winscard.h>
 // #include <PCSC/wintypes.h>
 // #include <stdlib.h>
@@ -12,8 +27,8 @@ import (
 	"unsafe"
 )
 
-// PCSCReader wraps macOS PC/SC framework for smart card access.
-type PCSCReader struct {
+// LinuxPCSCReader wraps pcsclite for smart card access.
+type LinuxPCSCReader struct {
 	ctx     C.SCARDCONTEXT
 	card    C.SCARDHANDLE
 	proto   C.DWORD
@@ -21,23 +36,26 @@ type PCSCReader struct {
 	atr     []byte
 }
 
-// NewPCSCReader initializes a PC/SC reader context and connects to the
-// first available reader with a card present.
-func NewPCSCReader() (*PCSCReader, error) {
-	r := &PCSCReader{}
+// NewLinuxPCSCReader establishes a pcsclite context and connects to the first
+// available reader. A reader with no card is not an error — Present() reports
+// that separately, matching the other backends.
+func NewLinuxPCSCReader() (*LinuxPCSCReader, error) {
+	r := &LinuxPCSCReader{}
 
-	// Establish context
 	rv := C.SCardEstablishContext(C.SCARD_SCOPE_SYSTEM, nil, nil, &r.ctx)
 	if rv != C.SCARD_S_SUCCESS {
 		return nil, fmt.Errorf("SCardEstablishContext: 0x%08x", uint32(rv))
 	}
 
-	// List readers
 	var readersLen C.DWORD
 	rv = C.SCardListReaders(r.ctx, nil, nil, &readersLen)
 	if rv != C.SCARD_S_SUCCESS {
 		C.SCardReleaseContext(r.ctx)
 		return nil, fmt.Errorf("SCardListReaders: 0x%08x", uint32(rv))
+	}
+	if readersLen == 0 {
+		C.SCardReleaseContext(r.ctx)
+		return nil, fmt.Errorf("no smart-card readers attached")
 	}
 
 	r.readers = make([]byte, readersLen)
@@ -47,7 +65,6 @@ func NewPCSCReader() (*PCSCReader, error) {
 		return nil, fmt.Errorf("SCardListReaders: 0x%08x", uint32(rv))
 	}
 
-	// Connect to first reader (multi-reader support would iterate here)
 	readerName := C.CString(string(r.readers[:cStringLen(r.readers)]))
 	defer C.free(unsafe.Pointer(readerName))
 
@@ -55,8 +72,7 @@ func NewPCSCReader() (*PCSCReader, error) {
 	rv = C.SCardConnect(r.ctx, readerName, C.SCARD_SHARE_SHARED,
 		C.SCARD_PROTOCOL_T0|C.SCARD_PROTOCOL_T1, &r.card, &activeProto)
 	if rv != C.SCARD_S_SUCCESS {
-		// No card present is OK — we'll check later
-		// SCARD_E_NO_SMARTCARD = 0x8010000C, SCARD_W_REMOVED_CARD = 0x80100069
+		// SCARD_E_NO_SMARTCARD / SCARD_W_REMOVED_CARD: reader but no card.
 		if uint32(rv) == 0x8010000C || uint32(rv) == 0x80100069 {
 			return r, nil
 		}
@@ -65,7 +81,6 @@ func NewPCSCReader() (*PCSCReader, error) {
 	}
 	r.proto = activeProto
 
-	// Read ATR
 	var atrLen C.DWORD = C.MAX_ATR_SIZE
 	atrBuf := make([]byte, C.MAX_ATR_SIZE)
 	var state, protocol C.DWORD
@@ -74,14 +89,16 @@ func NewPCSCReader() (*PCSCReader, error) {
 	if rv == C.SCARD_S_SUCCESS {
 		r.atr = atrBuf[:atrLen]
 	}
-
 	return r, nil
 }
 
 // Transmit sends an APDU to the card and returns the response.
-func (r *PCSCReader) Transmit(apdu []byte) ([]byte, error) {
+func (r *LinuxPCSCReader) Transmit(apdu []byte) ([]byte, error) {
 	if r.card == 0 {
 		return nil, fmt.Errorf("no card connected")
+	}
+	if len(apdu) == 0 {
+		return nil, fmt.Errorf("empty APDU")
 	}
 
 	var sendPci C.SCARD_IO_REQUEST
@@ -100,12 +117,11 @@ func (r *PCSCReader) Transmit(apdu []byte) ([]byte, error) {
 	if rv != C.SCARD_S_SUCCESS {
 		return nil, fmt.Errorf("SCardTransmit: 0x%08x", uint32(rv))
 	}
-
 	return respBuf[:respLen], nil
 }
 
-// Present returns true if a card is currently inserted.
-func (r *PCSCReader) Present() bool {
+// Present reports whether a card is currently inserted.
+func (r *LinuxPCSCReader) Present() bool {
 	if r.card == 0 {
 		return false
 	}
@@ -115,12 +131,18 @@ func (r *PCSCReader) Present() bool {
 }
 
 // ATR returns the Answer-To-Reset bytes.
-func (r *PCSCReader) ATR() []byte {
-	return r.atr
+func (r *LinuxPCSCReader) ATR() []byte { return r.atr }
+
+// Name returns the connected reader's name.
+func (r *LinuxPCSCReader) Name() string {
+	if len(r.readers) == 0 {
+		return ""
+	}
+	return string(r.readers[:cStringLen(r.readers)])
 }
 
-// Close releases the PC/SC context.
-func (r *PCSCReader) Close() error {
+// Close disconnects the card and releases the pcsclite context.
+func (r *LinuxPCSCReader) Close() error {
 	if r.card != 0 {
 		C.SCardDisconnect(r.card, C.SCARD_LEAVE_CARD)
 		r.card = 0
@@ -132,18 +154,9 @@ func (r *PCSCReader) Close() error {
 	return nil
 }
 
-// Name returns the connected reader's name.
-func (r *PCSCReader) Name() string {
-	if len(r.readers) == 0 {
-		return ""
-	}
-	return string(r.readers[:cStringLen(r.readers)])
-}
-
-// Status probes the local PC/SC subsystem for a reader + card, opening and
-// immediately closing a transient context. Used by the UI status endpoint.
+// Status probes the local PC/SC subsystem for a reader and card.
 func Status() ReaderStatus {
-	r, err := NewPCSCReader()
+	r, err := NewLinuxPCSCReader()
 	if err != nil {
 		return ReaderStatus{Reason: err.Error()}
 	}
@@ -159,5 +172,5 @@ func Status() ReaderStatus {
 
 // OpenReader opens a PC/SC reader for the lifetime of a redirection session.
 func OpenReader() (Reader, error) {
-	return NewPCSCReader()
+	return NewLinuxPCSCReader()
 }

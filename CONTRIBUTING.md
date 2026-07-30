@@ -52,8 +52,12 @@ go test ./...
 gofmt -l .          # should print nothing
 ```
 
-Go 1.26+. macOS and Linux. The smart-card backend uses cgo and PC/SC on macOS;
-everywhere else it compiles to a stub, so `CGO_ENABLED=0` builds are fine.
+Go 1.26+, on any platform Go supports. The only platform-specific code is the
+smart-card backend: cgo + PC/SC on macOS, cgo + pcsclite on Linux, and a
+cgo-free `winscard.dll` binding on Windows; everywhere else it compiles to a
+stub. Every combination of OS and `CGO_ENABLED` must keep building — CI checks
+that, and `internal/vcard` has a test that fails to compile if the build
+constraints ever leave a platform with no backend at all.
 
 ### Tests
 

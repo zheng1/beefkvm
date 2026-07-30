@@ -1,0 +1,129 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build (must already exist)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Resolve version
+        id: version
+        env:
+          # Passed through the environment rather than interpolated into the
+          # script, so a crafted tag/input can't inject shell.
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          v="${INPUT_TAG:-$REF_NAME}"
+          case "$v" in
+            v[0-9]*) ;;
+            *) echo "refusing to build unexpected version string" >&2; exit 1 ;;
+          esac
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Build release artifacts
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          # Static, dependency-free builds (CGO_ENABLED=0). Note this disables
+          # the cgo smart-card backends on macOS and Linux; Windows keeps smart
+          # card support because its backend binds winscard.dll at runtime.
+          # Users who need CAC/PIV on macOS/Linux should build from source with
+          # CGO_ENABLED=1 — the README says so too.
+          targets="
+            linux/amd64 linux/arm64 linux/arm linux/riscv64
+            darwin/amd64 darwin/arm64
+            windows/amd64 windows/arm64
+            freebsd/amd64
+          "
+          for t in $targets; do
+            os="${t%/*}"; arch="${t#*/}"
+            outdir="dist/beefkvm_${VERSION}_${os}_${arch}"
+            mkdir -p "$outdir"
+            for cmd in beefkvm apcp-probe; do
+              bin="$cmd"
+              [ "$os" = "windows" ] && bin="$cmd.exe"
+              GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build \
+                -trimpath \
+                -ldflags "-s -w -X main.version=${VERSION}" \
+                -o "$outdir/$bin" "./cmd/$cmd"
+            done
+            cp README.md LICENSE "$outdir/"
+            if [ "$os" = "windows" ]; then
+              (cd dist && zip -qr "beefkvm_${VERSION}_${os}_${arch}.zip" "beefkvm_${VERSION}_${os}_${arch}")
+            else
+              (cd dist && tar -czf "beefkvm_${VERSION}_${os}_${arch}.tar.gz" "beefkvm_${VERSION}_${os}_${arch}")
+            fi
+            rm -rf "$outdir"
+            echo "  built $t"
+          done
+
+          (cd dist && sha256sum ./*.tar.gz ./*.zip > SHA256SUMS)
+          ls -la dist
+
+      - name: Verify the built binary runs
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          tar -xzf "dist/beefkvm_${VERSION}_linux_amd64.tar.gz" -C /tmp
+          out=$("/tmp/beefkvm_${VERSION}_linux_amd64/beefkvm" --version)
+          echo "$out"
+          # The stamped version must match the tag, or the ldflags path broke.
+          case "$out" in
+            *"$VERSION"*) ;;
+            *) echo "version not stamped into binary" >&2; exit 1 ;;
+          esac
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          notes=$(mktemp)
+          {
+            echo "## Install"
+            echo
+            echo '```sh'
+            echo "go install github.com/zheng1/beefkvm/cmd/beefkvm@${VERSION}"
+            echo '```'
+            echo
+            echo "Or download an archive below, verify it against \`SHA256SUMS\`, and run \`beefkvm --version\`."
+            echo
+            echo "## Notes"
+            echo
+            echo "- Binaries are static (\`CGO_ENABLED=0\`) and need no runtime dependencies."
+            echo "- Smart-card (CAC/PIV) redirection is included on **Windows** only; on macOS and Linux it needs a cgo build (\`CGO_ENABLED=1\`, plus \`libpcsclite-dev\` on Linux). Every other feature is present on all platforms."
+            echo "- Hardware compatibility is verified on a single machine — see the README. Reports from other BMCs are very welcome."
+          } > "$notes"
+
+          gh release create "$VERSION" \
+            --title "$VERSION" \
+            --notes-file "$notes" \
+            --verify-tag \
+            dist/*.tar.gz dist/*.zip dist/SHA256SUMS

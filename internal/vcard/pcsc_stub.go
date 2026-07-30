@@ -1,11 +1,12 @@
-//go:build !darwin || !cgo
-// +build !darwin !cgo
+//go:build !windows && (!darwin || !cgo) && (!linux || !cgo)
 
 package vcard
 
 import "fmt"
 
-// StubReader is a no-op reader for platforms without PC/SC support.
+// StubReader is a no-op reader for platforms with no PC/SC backend.
+// Windows is excluded because its backend needs no cgo (winscard.dll is
+// bound dynamically), so it is always available there.
 type StubReader struct{}
 
 // NewStubReader creates a stub reader that reports no card present.

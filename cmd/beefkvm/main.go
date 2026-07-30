@@ -32,6 +32,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -49,6 +50,10 @@ import (
 //go:embed web
 var webFS embed.FS
 
+// version is stamped at build time with -ldflags "-X main.version=...".
+// Bug reports ask for it, so keep `beefkvm --version` cheap and always present.
+var version = "dev"
+
 func main() {
 	var (
 		host     = flag.String("host", envOr("BMC_HOST", ""), "BMC host")
@@ -63,10 +68,15 @@ func main() {
 		// IPMI over LAN (UDP 623) — separate credentials from the APCP
 		// KVM/VM channel. Defaults reuse the BMC user/pass which usually
 		// have IPMI privileges too. Empty user disables sensors + SEL.
-		ipmiUser = flag.String("ipmi-user", envOr("BMC_IPMI_USER", envOr("BMC_USER", "")), "IPMI user (empty disables /api/sensors + /api/sel)")
-		ipmiPass = flag.String("ipmi-pass", envOr("BMC_IPMI_PASS", envOr("BMC_PASS", "")), "IPMI password")
+		ipmiUser    = flag.String("ipmi-user", envOr("BMC_IPMI_USER", envOr("BMC_USER", "")), "IPMI user (empty disables /api/sensors + /api/sel)")
+		ipmiPass    = flag.String("ipmi-pass", envOr("BMC_IPMI_PASS", envOr("BMC_PASS", "")), "IPMI password")
+		showVersion = flag.Bool("version", false, "print version and exit")
 	)
 	flag.Parse()
+	if *showVersion {
+		fmt.Printf("beefkvm %s (%s/%s, %s)\n", version, runtime.GOOS, runtime.GOARCH, runtime.Version())
+		return
+	}
 	if *host == "" {
 		log.Fatal("beefkvm: --host (or BMC_HOST) is required, e.g. --host bmc.example or an IP")
 	}

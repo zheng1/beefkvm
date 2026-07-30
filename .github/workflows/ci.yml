@@ -11,14 +11,12 @@ permissions:
 
 jobs:
   test:
-    name: ${{ matrix.os }}
+    name: test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        # Linux exercises the no-cgo smart-card stub; macOS exercises the real
-        # PC/SC backend, which only compiles there.
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -28,6 +26,7 @@ jobs:
           cache: true
 
       - name: gofmt
+        if: runner.os != 'Windows'
         run: |
           unformatted=$(gofmt -l .)
           if [ -n "$unformatted" ]; then
@@ -46,8 +45,40 @@ jobs:
       - name: Test
         run: go test -race ./...
 
+  # The PC/SC backends are the only platform-specific code, so build them with
+  # cgo enabled on the platforms that have a real implementation.
+  smartcard-cgo:
+    name: smart card cgo (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install pcsclite (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpcsclite-dev
+
+      - name: Build with cgo
+        env:
+          CGO_ENABLED: "1"
+        run: go build ./...
+
+      - name: Test vcard with cgo
+        env:
+          CGO_ENABLED: "1"
+        run: go test ./internal/vcard/ -v
+
   build-nocgo:
-    name: CGO_ENABLED=0 (${{ matrix.os }})
+    name: nocgo (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -66,3 +97,36 @@ jobs:
         env:
           CGO_ENABLED: "0"
         run: go build ./...
+
+  cross:
+    name: cross-compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # Everything except the smart-card backends is portable Go, so these
+      # should all keep building. This job is what catches an accidental
+      # unix-ism or a build constraint that leaves a platform with no backend.
+      - name: Build all targets
+        run: |
+          set -euo pipefail
+          targets="
+            linux/amd64 linux/arm64 linux/arm linux/riscv64 linux/ppc64le linux/s390x
+            darwin/amd64 darwin/arm64
+            windows/amd64 windows/arm64 windows/386
+            freebsd/amd64 freebsd/arm64
+            openbsd/amd64 netbsd/amd64
+          "
+          fail=0
+          for t in $targets; do
+            os="${t%/*}"; arch="${t#*/}"
+            if GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build ./... 2>/tmp/err; then
+              echo "  ok    $t"
+            else
+              echo "  FAIL  $t"; sed 's/^/        /' /tmp/err; fail=1
+            fi
+          done
+          exit $fail

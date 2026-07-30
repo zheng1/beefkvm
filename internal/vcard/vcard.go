@@ -140,3 +140,14 @@ func (s *Session) debug(format string, args ...interface{}) {
 		s.log.Printf(format, args...)
 	}
 }
+
+// cStringLen returns the length of a NUL-terminated C string held in b.
+// Shared by the cgo backends, which receive PC/SC reader names as C strings.
+func cStringLen(b []byte) int {
+	for i, c := range b {
+		if c == 0 {
+			return i
+		}
+	}
+	return len(b)
+}

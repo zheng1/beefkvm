@@ -41,7 +41,7 @@ the console in a normal browser tab:
 | User management (add / edit / privilege / enable) | Working (IPMI) |
 | Network config (read; guarded write) | Working (IPMI LAN) |
 | Serial-over-LAN console | Working — see note below |
-| Smart card (CAC/PIV) redirection | Plumbed; needs a PC/SC reader to exercise |
+| Smart card (CAC/PIV) redirection | macOS + Linux (cgo) and Windows (no cgo); needs a reader to exercise |
 | Automatic reconnect on session drop | Working |
 
 ### Notes on the last three
@@ -169,8 +169,46 @@ cd beefkvm
 go build ./...
 ```
 
-Go 1.26+. macOS and Linux. The smart-card backend uses cgo + PC/SC on macOS;
-elsewhere it compiles to a no-op stub, so `CGO_ENABLED=0` builds are fine.
+Or grab a prebuilt binary from the
+[releases page](https://github.com/zheng1/beefkvm/releases) — they are static,
+have no runtime dependencies, and `beefkvm --version` tells you what you have.
+
+### Platform support
+
+Go 1.26+. beefkvm is portable Go with no unix-isms, so it builds everywhere Go
+does; CI cross-compiles every target below on each push.
+
+Be aware of what "supported" means here, though — the project has only ever
+been *run* against a BMC from macOS. Everything else is verified to build and
+pass tests, which is not the same as someone having used it:
+
+| Platform | Builds & tests in CI | Run against real hardware | Smart card (CAC/PIV) |
+|---|---|---|---|
+| macOS (arm64, amd64) | yes | **yes** | yes, with cgo |
+| Linux (amd64, arm64, arm, riscv64, ppc64le, s390x) | yes | not yet | yes, with cgo + `libpcsclite-dev` |
+| Windows (amd64, arm64, 386) | yes | not yet | **yes, always** — no cgo needed |
+| FreeBSD / OpenBSD / NetBSD | cross-compiled | not yet | no backend (stub) |
+
+If you run it on Linux or Windows, a
+[hardware report](https://github.com/zheng1/beefkvm/issues/new?template=hardware-report.yml)
+saying so would let these rows say "yes".
+
+### A note on cgo and smart cards
+
+Smart-card redirection is the only part that isn't pure Go:
+
+- **Windows** binds `winscard.dll` at runtime, so it works in a plain
+  `CGO_ENABLED=0` build — including the release binaries.
+- **macOS** needs cgo and the system PC/SC framework.
+- **Linux** needs cgo and pcsclite (`apt install libpcsclite-dev`, or
+  `dnf install pcsc-lite-devel`), plus `pcscd` running.
+- **Everywhere else**, and in any `CGO_ENABLED=0` build on macOS/Linux, it
+  compiles to a stub that reports smart-card support as unavailable.
+
+Since the release archives are built with `CGO_ENABLED=0` for portability, they
+carry smart-card support on Windows but not on macOS or Linux. Build from
+source with `CGO_ENABLED=1` if you need it there. Nothing else is affected —
+every other feature is present on every platform.
 
 ## Quick start
 
