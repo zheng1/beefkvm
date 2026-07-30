@@ -67,15 +67,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libpcsclite-dev
 
+      # Linux gates its pcsclite backend behind the `pcsc` tag so that a plain
+      # `go build ./...` doesn't demand libpcsclite-dev; macOS needs no tag
+      # because PC/SC ships with the OS.
       - name: Build with cgo
         env:
           CGO_ENABLED: "1"
-        run: go build ./...
+          TAGS: ${{ runner.os == 'Linux' && '-tags=pcsc' || '' }}
+        run: go build ${TAGS} ./...
 
       - name: Test vcard with cgo
         env:
           CGO_ENABLED: "1"
-        run: go test ./internal/vcard/ -v
+          TAGS: ${{ runner.os == 'Linux' && '-tags=pcsc' || '' }}
+        run: go test ${TAGS} ./internal/vcard/ -v
 
   build-nocgo:
     name: nocgo (${{ matrix.os }})

@@ -1,4 +1,4 @@
-//go:build linux && cgo
+//go:build linux && cgo && pcsc
 
 package vcard
 
@@ -6,6 +6,12 @@ package vcard
 // so this mirrors the macOS backend almost line for line; the differences are
 // the header location (<PCSC/winscard.h> from pcsclite rather than the macOS
 // framework) and linking against libpcsclite instead of -framework PCSC.
+//
+// This backend is OPT-IN via the `pcsc` build tag, because cgo is on by
+// default on Linux and requiring libpcsclite-dev for a plain `go build ./...`
+// would break the default developer experience:
+//
+//	go build -tags pcsc ./...
 //
 // Requires the pcsclite development headers at build time:
 //

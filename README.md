@@ -185,7 +185,7 @@ pass tests, which is not the same as someone having used it:
 | Platform | Builds & tests in CI | Run against real hardware | Smart card (CAC/PIV) |
 |---|---|---|---|
 | macOS (arm64, amd64) | yes | **yes** | yes, with cgo |
-| Linux (amd64, arm64, arm, riscv64, ppc64le, s390x) | yes | not yet | yes, with cgo + `libpcsclite-dev` |
+| Linux (amd64, arm64, arm, riscv64, ppc64le, s390x) | yes | not yet | yes, with `-tags pcsc` + `libpcsclite-dev` |
 | Windows (amd64, arm64, 386) | yes | not yet | **yes, always** — no cgo needed |
 | FreeBSD / OpenBSD / NetBSD | cross-compiled | not yet | no backend (stub) |
 
@@ -200,10 +200,20 @@ Smart-card redirection is the only part that isn't pure Go:
 - **Windows** binds `winscard.dll` at runtime, so it works in a plain
   `CGO_ENABLED=0` build — including the release binaries.
 - **macOS** needs cgo and the system PC/SC framework.
-- **Linux** needs cgo and pcsclite (`apt install libpcsclite-dev`, or
-  `dnf install pcsc-lite-devel`), plus `pcscd` running.
-- **Everywhere else**, and in any `CGO_ENABLED=0` build on macOS/Linux, it
-  compiles to a stub that reports smart-card support as unavailable.
+- **Linux** needs the `pcsc` build tag, cgo, and pcsclite
+  (`apt install libpcsclite-dev`, or `dnf install pcsc-lite-devel`), plus
+  `pcscd` running:
+
+  ```sh
+  go build -tags pcsc ./...
+  ```
+
+  The tag is opt-in on purpose: cgo is enabled by default on Linux, so building
+  the backend unconditionally would make a plain `go build ./...` fail on any
+  machine without the pcsclite headers.
+- **Everywhere else** — including a default Linux build without the tag, and
+  any `CGO_ENABLED=0` build — it compiles to a stub that reports smart-card
+  support as unavailable.
 
 Since the release archives are built with `CGO_ENABLED=0` for portability, they
 carry smart-card support on Windows but not on macOS or Linux. Build from

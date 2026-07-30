@@ -53,7 +53,8 @@ gofmt -l .          # should print nothing
 ```
 
 Go 1.26+, on any platform Go supports. The only platform-specific code is the
-smart-card backend: cgo + PC/SC on macOS, cgo + pcsclite on Linux, and a
+smart-card backend: cgo + PC/SC on macOS, cgo + pcsclite on Linux behind the
+`pcsc` build tag, and a
 cgo-free `winscard.dll` binding on Windows; everywhere else it compiles to a
 stub. Every combination of OS and `CGO_ENABLED` must keep building — CI checks
 that, and `internal/vcard` has a test that fails to compile if the build

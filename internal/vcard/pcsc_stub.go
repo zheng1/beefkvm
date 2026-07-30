@@ -1,4 +1,4 @@
-//go:build !windows && (!darwin || !cgo) && (!linux || !cgo)
+//go:build !windows && (!darwin || !cgo) && (!linux || !cgo || !pcsc)
 
 package vcard
 
