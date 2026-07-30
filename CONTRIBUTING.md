@@ -128,6 +128,19 @@ Maintainers will never ask you for your BMC credentials.
 - Describe how you tested. "Verified on a Dell R710, iDRAC6 firmware 2.92" is
   worth more than a long description of the diff.
 
+## Releasing (maintainers)
+
+Push a `v*` tag. The release workflow builds static binaries for nine
+platforms, publishes them with `SHA256SUMS`, and smoke-runs the Linux binary to
+confirm the version was actually stamped in.
+
+Bumping the [Homebrew tap](https://github.com/zheng1/homebrew-beefkvm) is
+automatic *if* a `TAP_GITHUB_TOKEN` repository secret exists — `GITHUB_TOKEN`
+cannot write to another repository, so this needs a fine-grained PAT scoped to
+`zheng1/homebrew-beefkvm` with **Contents: read and write**. Without the secret
+the job logs that it skipped and the release still succeeds; update
+`Formula/beefkvm.rb` by hand in that case.
+
 ## License
 
 By contributing you agree that your contributions are licensed under the

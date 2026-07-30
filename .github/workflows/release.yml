@@ -127,3 +127,83 @@ jobs:
             --notes-file "$notes" \
             --verify-tag \
             dist/*.tar.gz dist/*.zip dist/SHA256SUMS
+
+  # Bump the Homebrew tap to the new tag. Skipped unless TAP_GITHUB_TOKEN is
+  # configured, since GITHUB_TOKEN cannot write to another repository — see the
+  # release section of CONTRIBUTING.md for how to set it up.
+  homebrew:
+    name: bump homebrew tap
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for tap token
+        id: gate
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          if [ -n "$TAP_TOKEN" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "TAP_GITHUB_TOKEN not set — skipping tap bump." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Resolve version
+        if: steps.gate.outputs.enabled == 'true'
+        id: version
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          v="${INPUT_TAG:-$REF_NAME}"
+          case "$v" in
+            v[0-9]*) ;;
+            *) echo "refusing unexpected version string" >&2; exit 1 ;;
+          esac
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Check out tap
+        if: steps.gate.outputs.enabled == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: zheng1/homebrew-beefkvm
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          path: tap
+
+      - name: Update formula
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          url="https://github.com/zheng1/beefkvm/archive/refs/tags/${VERSION}.tar.gz"
+          curl -fsSL "$url" -o /tmp/src.tar.gz
+          sha=$(sha256sum /tmp/src.tar.gz | cut -d" " -f1)
+          f=tap/Formula/beefkvm.rb
+          # Rewrite only the url and sha256 lines; everything else in the
+          # formula is hand-maintained. '|' delimits the substitution because
+          # the URL contains slashes.
+          sed -i -E \
+            -e "s|^  url \".*\"$|  url \"${url}\"|" \
+            -e "s|^  sha256 \".*\"$|  sha256 \"${sha}\"|" \
+            "$f"
+          grep -E '^  (url|sha256) ' "$f"
+          ruby -c "$f"
+          cd tap && git diff --stat
+
+      - name: Commit and push
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        working-directory: tap
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "formula already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "beefkvm ${VERSION}"
+          git push

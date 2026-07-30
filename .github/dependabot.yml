@@ -1,0 +1,32 @@
+version: 2
+updates:
+  # Go module dependencies. The tree is deliberately small (websocket, utls,
+  # x/sys), and utls in particular is security-relevant: it drives the legacy
+  # TLS 1.0 handshake the BMC requires, so keep an eye on those bumps.
+  - package-ecosystem: gomod
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    groups:
+      # One PR for routine patch/minor bumps; majors still come separately so
+      # they get read properly.
+      go-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # Workflow actions. These run with contents:write on release, so stale or
+  # unpinned actions are a real supply-chain concern.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        update-types: ["minor", "patch"]

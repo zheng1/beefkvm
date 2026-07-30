@@ -157,8 +157,18 @@ another path.
 
 ## Install
 
+**Homebrew** (macOS, and Linuxbrew):
+
+```sh
+brew tap zheng1/beefkvm
+brew install beefkvm
+```
+
+**Go:**
+
 ```sh
 go install github.com/zheng1/beefkvm/cmd/beefkvm@latest
+go install github.com/zheng1/beefkvm/cmd/apcp-probe@latest
 ```
 
 Or build everything from a checkout:
